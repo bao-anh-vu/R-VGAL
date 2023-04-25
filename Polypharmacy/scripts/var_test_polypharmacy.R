@@ -17,10 +17,10 @@ library("reshape2")
 source("./scripts/run_rvgal.R")
 
 ## Flags
-date <- "20230327_1"
-rerun_test <- F
-save_results <- F
-save_images <- F
+date <- "20230327_0"
+rerun_test <- T
+save_results <- T
+save_images <- T
 reorder_data <- F #this is only for reordering the data ONCE, then that order is fixed for all runs
 use_tempering <- T
 
@@ -35,9 +35,9 @@ if (use_tempering) {
   a_vals_temper <- rep(1/4, 4)
 }
 
-runs <- 1
-S <- 500L
-S_alpha <- 500L
+runs <- 10
+S <- 50L
+S_alpha <- 50L
 
 ## Read data
 data <- read_excel("./data/polypharm.xls")
@@ -92,7 +92,7 @@ if (reorder_data) {
   reorder_info <- ""
 }
 
-result_directory <- paste0("./var_test_", date, "/results/")
+result_directory <- paste0("./var_test/results/")
 results_file <- paste0("var_test", temper_info, reorder_info,
                        "_S", S, "_Sa", S_alpha, "_", date, ".rds")
 results_filepath <- paste0(result_directory, results_file)
@@ -115,7 +115,7 @@ if (rerun_test) {
   
   param_dim <- as.integer(ncol(X[[1]]) + 1)
   beta_0 <- rep(0, param_dim - 1) # initial values of beta
-  omega_0 <- 1 #log(0.5^h2)
+  omega_0 <- 0 #log(0.5^h2)
   
   results <- list()
   r <- 1
@@ -173,7 +173,7 @@ if (rerun_test) {
 }
 
 ###########################################
-##              Plots results            ##
+##              Plot results            ##
 ###########################################
 
 ## Plot parameter trajectories
@@ -187,7 +187,7 @@ for (p in 1:param_dim) {
 if (save_images) {
   filename2 = paste0("trajectories", temper_info, reorder_info,
                      "_S", S, "_Sa", S_alpha, "_", date, ".png")
-  filepath2 = paste0(result_directory, filename2)
+  filepath2 = paste0("./var_test/plots/", filename2)
   
   png(filepath2, width = 700, height = 500)
 }
@@ -211,7 +211,7 @@ if (save_images) {
 ## Plot posterior densities
 
 ## HMC posterior for comparison
-hfit <- readRDS(file = paste0("./results/polypharmacy_mm_hmc_", date, ".rds"))
+hfit <- readRDS(file = paste0(result_directory, "polypharmacy_mm_hmc_", date, ".rds"))
 hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", 
                                   "beta[5]","beta[6]","beta[7]","beta[8]", "omega"),
                    permuted = F)
@@ -269,8 +269,10 @@ for (p in 1:param_dim) {
 }
 
 ## Saving the plots
+grid.arrange(grobs = param_plots, nrow = 3, ncol = 3)
+
 if (save_images) {
-  plot_directory <- paste0("./var_test_", date, "/plots/")
+  plot_directory <- paste0("./var_test/plots/")
   plot_file = paste0("var_test", temper_info, reorder_info,
                     "_S", S, "_Sa", S_alpha, "_", date, ".png")
   filepath = paste0(plot_directory, plot_file)
@@ -278,8 +280,5 @@ if (save_images) {
   png(filepath, width = 800, height = 500)
   grid.arrange(grobs = param_plots, nrow = 3, ncol = 3)
   dev.off()
+} 
   
-} else {
-  grid.arrange(grobs = param_plots, nrow = 3, ncol = 3)
-  
-}
