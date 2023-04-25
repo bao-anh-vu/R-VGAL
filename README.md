@@ -11,7 +11,7 @@ Each example is stored in one folder, which contains separate sub-folders:
 In the logistic simulated data example and the POLYPHARMACY example, there are additional folders named `var_test`, which contains code and output for the tests on the variance of the R-VGAL posterior densities in the Supplementary material of the manuscript. The script for the variance tests are contained in the `scripts` folder, while the output and plot from the variance tests are stored in the `var_test/results` and `var_test/plots` folders, respectively.
 
 ## Running the scripts
-To reproduce the results in the manuscript, for example that of the Linear mixed model, download the `Linear` folder and run the `linear_mm_main` file. By default, this file will read the data and output saved in the `Linear/data` and `Linear/results` folders.
+To reproduce the results in the manuscript, for example that of the Linear mixed model, download the `Linear` folder and run the `linear_mm_main` file inside `scripts`. By default, this file will read the data and output saved in the `Linear/data` and `Linear/results` folders.
 
 To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main` file to `TRUE`.
 
