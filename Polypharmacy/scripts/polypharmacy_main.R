@@ -16,7 +16,7 @@ rerun_rvga <- F
 save_rvga_results <- F
 rerun_stan <- F
 save_hmc_results <- F
-date <- "20230327_1" #"20230327_1" has N(1,1) prior, "20230327_0" has N(0,1) prior, "20230328" has N(1,5) prior
+date <- "20230327_1" 
 use_tempering <- T
 reorder_data <- F
 save_plots <- F
