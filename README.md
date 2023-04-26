@@ -5,7 +5,7 @@ This folder contains R code for the 4 examples in the R-VGAL manuscript: the lin
 ## Folder structure
 Each example is stored in one folder, which contains separate sub-folders:
 1. `source`, which contains the R code to run the R-VGAL and HMC algorithms on the model in the example
-2. `results`, which contains the output from the scripts (both R-VGAL and HMC outputs)
+2. `results`, which contains the output from the source code (both R-VGAL and HMC outputs)
 3. `plots`, which contains the plots of the posterior densities and bivariate posterior plots for each parameter in the model.
 4. `var_test`, which contains the R code, output and plot for the test on the variance of the R-VGAL results for different Monte Carlo sample sizes (see Section S3 of the Supplementary material)
 
