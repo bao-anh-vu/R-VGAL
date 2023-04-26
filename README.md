@@ -1,6 +1,10 @@
 # R-VGAL
 
-This folder contains R code for the 4 examples in the R-VGAL manuscript: the linear mixed model with simulated data, the logistic mixed model with simulated data, and the logistic mixed model applied on the Six city and POLYPHARMACY datasets.
+This folder contains R code for the 4 examples in the R-VGAL manuscript: 
+1. the linear mixed model with simulated data, 
+2. the logistic mixed model with simulated data,
+3. the logistic mixed model applied to the Six city dataset, and 
+4. the logistic mixed model applied to the POLYPHARMACY dataset.
 
 ## Folder structure
 Each example is stored in one folder, which contains separate sub-folders:
@@ -26,6 +30,3 @@ Running the source code requires the following packages:
 4. `ggplot2` v3.4.2
 5. `gridExtra` v2.3
 6. `gtable` v0.3.0         
-         
-         
-         
