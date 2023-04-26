@@ -15,6 +15,10 @@ To reproduce the results in the manuscript, for example that of the Linear mixed
 
 To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main` file to `TRUE`. For this step, the `tensorflow` and `reticulate` libraries are required. The package versions required are listed below.
 
+Similarly, results from other examples involving the logistic mixed model can be reproduced by running the `main` file in each example's respective folder.
+
+Results from the Supplementary material can be reproduced using the `var_test_*.R` files in the Logistic and Polypharmacy folders. Inside each `var_test_*.R` files, there are flags to enable/disable variational tempering, reordering the data, and the number of Monte Carlo samples $S$ and $S_\alpha$. Results for cases where the values of $S$ and $S_\alpha$ are taken from the set {50, 100, 500, 1000} are already saved so that they can be reproduced if the flag `reruun_test` is set to `FALSE`, but setting $S$ and $S_\alpha$ to any other values requires `rerun_test = TRUE`.
+
 ## Package requirements
 Running R-VGAL requires the following packages:
 1. reticulate v1.27
