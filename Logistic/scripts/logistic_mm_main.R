@@ -11,7 +11,7 @@ library("dplyr")
 library("tensorflow")
 library("mvtnorm")
 library("rstan")
-library("car")
+# library("car")
 library("gridExtra")
 library("grid")
 library("gtable")
@@ -23,8 +23,8 @@ source("./scripts/generate_data.R")
 ## Flags
 date <- "20230329" #"20230317" 
 regenerate_data <- F
-rerun_rvga <- F
-rerun_stan <- F
+rerun_rvga <- T
+rerun_stan <- T
 save_data <- F
 save_rvga_results <- F
 save_hmc_results <- F
@@ -235,7 +235,7 @@ for (ind in 1:n_lower_tri) {
   
   param_df <- data.frame(x = param_values[p], y = param_values[q])
   
-  cov_plot <- ggplot(rvga.df, aes_string(x = param_names[p], y = param_names[q])) +
+  cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[p]]], y = .data[[param_names[q]]])) +
     stat_ellipse(col = "goldenrod", type = "norm") +
     stat_ellipse(data = rvga.df, col = "red", type = "norm") +
     stat_ellipse(data = hmc.df, col = "blue", type = "norm") +
