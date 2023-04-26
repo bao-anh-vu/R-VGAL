@@ -11,7 +11,6 @@ library("dplyr")
 library("tensorflow")
 library("mvtnorm")
 library("rstan")
-# library("car")
 library("gridExtra")
 library("grid")
 library("gtable")
@@ -21,7 +20,7 @@ source("./scripts/run_stan_logmm.R")
 source("./scripts/generate_data.R")
 
 ## Flags
-date <- "20230329" #"20230317" 
+date <- "20230329"  
 regenerate_data <- F
 rerun_rvga <- T
 rerun_stan <- T
@@ -42,7 +41,7 @@ n_post_samples <- 10000
 ## Generate data
 N <- 500L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-1.5, 1.5, 0.5, 0.25) # c(-2, 1, param_dim, -4)  #
+beta <- c(-1.5, 1.5, 0.5, 0.25) 
 tau <- 0.9
 
 if (regenerate_data) {
