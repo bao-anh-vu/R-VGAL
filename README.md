@@ -17,7 +17,7 @@ To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc
 
 Similarly, results from other examples involving the logistic mixed model can be reproduced by running the `main` file in each example's respective folder.
 
-Results from the Supplementary material can be reproduced using the `var_test_*.R` files in the Logistic and Polypharmacy folders. Inside each `var_test_*.R` files, there are flags to enable/disable variational tempering, reordering the data, and the number of Monte Carlo samples $S$ and $S_\alpha$. Results for cases where the values of $S$ and $S_\alpha$ are taken from the set {50, 100, 500, 1000} are already saved so that they can be reproduced if the flag `rerun_test` is set to `FALSE`, but setting $S$ and $S_\alpha$ to any other values requires `rerun_test = TRUE`.
+Results from the Supplementary material can be reproduced using the `var_test_*.R` files in the Logistic and Polypharmacy folders. Inside each `var_test_*.R` files, there are flags to enable/disable variational tempering, enable/disable reordering the data, and to set the number of Monte Carlo samples $S$ and $S_\alpha$. Results for cases where the values of $S$ and $S_\alpha$ are taken from the set {50, 100, 500, 1000} are already saved so that they can be reproduced if the flag `rerun_test` is set to `FALSE`, but setting $S$ and $S_\alpha$ to any other values requires `rerun_test = TRUE`.
 
 ## Package requirements
 Running R-VGAL requires the following packages:
