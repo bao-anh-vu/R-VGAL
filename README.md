@@ -29,7 +29,7 @@ Running HCM requires
 
 Reproducing the figures in the manuscript requires the following packages:
 4. ggplot2 v3.4.2
-5. gridExtra v2.3        
+5. gridExtra v2.3
 6. gtable v0.3.0         
          
          
