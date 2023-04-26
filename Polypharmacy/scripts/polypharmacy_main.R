@@ -1,6 +1,3 @@
-# filepath <- "/home/babv971/R-VGA/Polypharmacy/Tempering"
-# setwd(filepath)
-
 ## Logistic mixed model with real data ##
 reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
