@@ -18,5 +18,5 @@ To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc
 ## Package requirements
 Running R-VGAL requires the following packages:
 1. reticulate v1.27
-2. rstan v2.21.7 (for instructions on how to install RStan, see [RStan Getting Started] (https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started)
+2. rstan v2.21.7 (for instructions on how to install RStan, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started)
 3. tensorflow v2.11
