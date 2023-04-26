@@ -21,12 +21,12 @@ Results from the Supplementary material can be reproduced using the `var_test_*.
 
 ## Package requirements
 Running the scripts requires the following packages:
-1. reticulate v1.27
-2. tensorflow v2.11
-3. rstan v2.21.7 (for instructions on how to install RStan, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started))
-4. ggplot2 v3.4.2
-5. gridExtra v2.3
-6. gtable v0.3.0         
+1. `reticulate` v1.27
+2. `tensorflow` v2.11
+3. `rstan` v2.21.7 (for instructions on how to install RStan, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started))
+4. `ggplot2` v3.4.2
+5. `gridExtra` v2.3
+6. `gtable` v0.3.0         
          
          
          
