@@ -11,7 +11,6 @@ library("tensorflow")
 library("mvtnorm")
 library("Matrix")
 library("rstan")
-# library("car")
 library("ggplot2")
 library("grid")
 library("gtable")
@@ -53,7 +52,7 @@ if (regenerate_data) {
   ## True parameters
   sigma_a <- 0.9
   sigma_e <- 0.7
-  beta <- c(-1.5, 1.5, 0.5, 0.25) # runif(4, -3, 3)
+  beta <- c(-1.5, 1.5, 0.5, 0.25) 
   
   linear_data <- generate_data(beta, sigma_a, sigma_e, save_data = save_data, date)
   
@@ -266,8 +265,6 @@ sigma_e_plot <- ggplot(exact_rvgal.df, aes(x=sigma_e)) +
 plots[[param_dim-1]] <- sigma_a_plot
 plots[[param_dim]] <- sigma_e_plot
 
-# grid.arrange(grobs = plots, nrow = 2, ncol = 3)
-
 ## Arrange bivariate plots in lower off-diagonals
 n_lower_tri <- (param_dim^2 - param_dim)/2 # number of lower triangular elements
 
@@ -286,16 +283,13 @@ for (ind in 1:n_lower_tri) {
   q <- mat_ind[2]
   
   param_df <- data.frame(x = param_values[p], y = param_values[q])
-  # bivariate_df <- data.frame(x = exact_rvgal.df[, p], exact_rvgal.df[, q])
   
-  # cov_plot <- ggplot(exact_rvgal.df, aes_string(x = param_names[p], y = param_names[q])) +
   cov_plot <- ggplot(exact_rvgal.df, aes(x = .data[[param_names[p]]], y = .data[[param_names[q]]])) +
     stat_ellipse(col = "goldenrod", type = "norm") +
     stat_ellipse(data = est_rvgal.df, col = "red", type = "norm") +
     stat_ellipse(data = hmc.df, col = "blue", type = "norm") +
     geom_point(data = param_df, aes(x = x, y = y),
                shape = 4, color = "black", size = 2) +
-    # stat_ellipse(data = batchvb.df, col = "skyblue") +
     theme_bw() +
     theme(axis.title = element_blank())
   
@@ -327,7 +321,6 @@ gp <- gtable_add_rows(gp, unit(1.5, "lines"), -1) #0 adds on the top
 # gtable_show_layout(gp) shows the layout.
 gp <- gtable_add_grob(gp, lapply(vars[1:6], editGrob, rot = 90), t = 1:6, l = 1)
 gp <- gtable_add_grob(gp, vars[1:6], t = 7, l = 2:7)
-# gp <- gtable_add_grob(gp, grobs = ggplotGrob(plots[[1]]), t = 2, l = 2)
 
 grid.newpage()
 grid.draw(gp)
