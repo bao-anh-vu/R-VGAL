@@ -11,7 +11,7 @@ library("tensorflow")
 library("mvtnorm")
 library("Matrix")
 library("rstan")
-library("car")
+# library("car")
 library("ggplot2")
 library("grid")
 library("gtable")
@@ -20,13 +20,13 @@ library("gridExtra")
 source("./scripts/generate_data.R")
 source("./scripts/run_est_rvgal.R")
 source("./scripts/run_exact_rvgal.R")
-# source("./scripts/run_finite_difference.R") # to calculate numerical gradients/Hessians
+# source("./scripts/run_finite_difference.R") # to calculate numerical gradients/Hessians for comparison with theoretical ones
 source("./scripts/run_stan_lmm.R")
 
 date <- "20230329"
 regenerate_data <- F
-rerun_est_rvgal <- F
-rerun_exact_rvgal <- F
+rerun_est_rvgal <- T
+rerun_exact_rvgal <- T
 rerun_hmc <- F
 reorder_data <- F
 use_tempering <- T
