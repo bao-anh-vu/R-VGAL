@@ -1,7 +1,5 @@
 ## Logistic mixed model with POLYPHARMACY data ##
 
-setwd("~/R-VGAL/4_Polypharmacy/")
-
 reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
 library("readxl") # part of tidyverse

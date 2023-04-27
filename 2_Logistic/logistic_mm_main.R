@@ -4,8 +4,6 @@
 # 3. Run HMC
 # 4. Plot results
 
-setwd("~/R-VGAL/2_Logistic/")
-
 rm(list=ls())
 
 reticulate::use_condaenv("tf2.11", required = TRUE)

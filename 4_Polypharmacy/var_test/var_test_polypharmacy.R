@@ -4,8 +4,6 @@
 ## (change the "runs" parameter as needed)
 ## If only looking for saved results, set rerun_test <- FALSE
 
-setwd("~/R-VGAL/4_Polypharmacy/")
-
 rm(list = ls())
 
 reticulate::use_condaenv("tf2.11", required = TRUE)

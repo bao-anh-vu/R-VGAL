@@ -8,8 +8,6 @@
 ## phi = phi_alpha in the paper
 ## psi = phi_epsilon in the paper
 
-setwd("~/R-VGAL/1_Linear/")
-
 rm(list = ls())
 
 reticulate::use_condaenv("tf2.11", required = TRUE)

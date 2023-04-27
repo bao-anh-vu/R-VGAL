@@ -4,8 +4,6 @@
 ## 3. Run R-VGAL with theoretical gradients/Hessians
 ## 4. Run HMC 
 
-setwd("~/R-VGAL/1_Linear/")
-
 rm(list = ls())
 
 reticulate::use_condaenv("tf2.11", required = TRUE)

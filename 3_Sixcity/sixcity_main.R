@@ -1,7 +1,5 @@
 ## R-VGAL with six city data ##
 
-setwd("~/R-VGAL/3_Sixcity/")
-
 reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
 library("dplyr")
