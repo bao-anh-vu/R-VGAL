@@ -15,7 +15,7 @@ Each example is stored in one folder, which contains separate sub-folders:
 
 ## Running the scripts
 To reproduce the results in the manuscript, for example that of the Linear mixed model, download the `1_Linear` folder and run the `linear_mm_main.R` file. Note that the working directory needs to be set to the `1_Linear` folder for the filepaths to work properly (and similarly, for other examples, set the working directory to the folder containing that example). 
-- To reproduce the results based on pre-saved data and output, set `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main.R` file to `FALSE`, and the script will produce output and plots from the `results` and `plots` folders automatically. 
+- To reproduce the results based on pre-saved data and output, set `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main.R` file to `FALSE`, and the script will produce output and plots from the `results` and `plots` folders automatically. To view pre-saved results, the `tensorflow` and `rstan` packages are not required and can be commented out.
 - To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc` to `TRUE`. For this step, the `tensorflow` and `rstan` packages are required. Package versions and installation instructions for these packages can be found in the next section. 
 
 Results from other examples can be similarly reproduced by running the `*_main.R` file in each example's respective folder.
