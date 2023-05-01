@@ -15,14 +15,16 @@ Each example is stored in one folder, which contains separate sub-folders:
 
 ## Running the scripts
 To reproduce the results in the manuscript, for example that of the Linear mixed model, download the `1_Linear` folder and run the `linear_mm_main.R` file. Note that the working directory needs to be set to the `1_Linear` folder for the filepaths to work properly (and similarly, for other examples, set the working directory to the folder containing that example). 
-- To reproduce the results based on pre-saved data and output, set `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main.R` file to `FALSE`, and the script will produce output and plots from the `results` and `plots` folders automatically. To view pre-saved results, the `tensorflow` and `rstan` packages are not required and can be commented out.
-- To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc` to `TRUE`. For this step, the `tensorflow` and `rstan` packages are required. Package versions and installation instructions for these packages can be found in the next section. 
+- To reproduce the results based on pre-saved data and output, set `rerun_rvga` and `rerun_hmc` at the start of the `linear_mm_main.R` file to `FALSE`, and the script will produce output and plots from the `results` and `plots` folders automatically. 
+- To re-run R-VGAL and HMC from scratch, set the flags `rerun_rvga` and `rerun_hmc` to `TRUE`. 
 
 Results from other examples can be similarly reproduced by running the `*_main.R` file in each example's respective folder.
 
 Results from the Supplementary material can be reproduced by running the `var_test_*.R` files in the `Logistic/var_test` and `Polypharmacy/var_test` folders. Inside each `var_test_*.R` files, there are flags to enable/disable variational tempering, enable/disable reordering the data, and to set the number of Monte Carlo samples $S$ and $S_\alpha$. Results for cases where the values of $S$ and $S_\alpha$ are taken from the set {50, 100, 500, 1000} are already saved so that they can be reproduced if the flag `rerun_test` is set to `FALSE`, but setting $S$ and $S_\alpha$ to any other values requires `rerun_test = TRUE`.
 
-## RStudio version requirement
+The RStudio version and R packages required to run the code, along with installation instructions for these packages, can be found in the next section. 
+
+## RStudio version requirements
 In order to run the HMC code, which was implemented in RStan 2.21, it is highly recommended that you install R version 4.0 or 4.1. The latest released version of RStan at the time of writing is 2.21, which is not yet compatible with R 4.2 and above. There is an RStan development version, 2.26.x, which can be configured to work with R 4.2, but the code in this repository has not been tested on such a configuration.
 
 Note that prior to installing RStan, you need to configure your R installation to be able to compile C++ code. For instructions, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started) under **Configuring C++ Toolchain**. Note that instructions vary depending on your operating system, and if you are using Windows, instructions will also vary depending on your R version (3.6/4.0/4.2). 
