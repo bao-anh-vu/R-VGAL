@@ -32,7 +32,7 @@ Next type
 ```
 install_tensorflow(version = "2.11")
 ```
-which will install `tensorflow` 2.11. 
+which will install `tensorflow` v2.11. 
 
 A quick installation guide along with system requirements for `tensorflow` in R can be found [here](https://tensorflow.rstudio.com/install). 
 
