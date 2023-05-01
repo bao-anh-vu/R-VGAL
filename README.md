@@ -32,7 +32,7 @@ The R-VGAL code will work with R versions 3.6 onwards, provided that the package
 ```
 install.packages("tensorflow")
 ```
-Next, type
+Next, run the following lines of code:
 ```
 library(tensorflow)
 install_tensorflow(version = "2.11")
@@ -48,3 +48,6 @@ Running the source code requires the following packages (along with their depend
 3. `ggplot2` v3.4.2
 4. `gridExtra` v2.3
 5. `gtable` v0.3.0         
+6. `mvtnorm` v1.1
+7. `dplyr` v1.1
+8. `readxl` v1.4.2
