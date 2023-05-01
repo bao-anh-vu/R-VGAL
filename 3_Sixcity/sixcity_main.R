@@ -1,6 +1,6 @@
 ## R-VGAL with six city data ##
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
 library("dplyr")
 library("mvtnorm")
@@ -16,7 +16,7 @@ rerun_rvga <- T
 save_rvga_results <- F
 rerun_stan <- T
 save_hmc_results <- F
-date <- "20230327" #"20230217g"
+date <- "20230327" 
 reorder_data <- T
 use_tempering <- T
 save_plots <- F
