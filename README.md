@@ -36,7 +36,7 @@ which will install `tensorflow` v2.11.
 
 A quick installation guide along with system requirements for `tensorflow` in R can be found [here](https://tensorflow.rstudio.com/install). 
 
-In order to run the HMC code, which was implemented in RStan, it is highly recommended that you install R version 4.0 or above. Note that prior to installing RStan, you need to configure your R installation to be able to compile C++ code. For instructions, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started)) under **Configuring C++ Toolchain**. Note that instructions vary depending on your operating system, and if you are using Windows, instructions will also vary depending on your R version (3.6/4.0/4.2). 
+In order to run the HMC code, which was implemented in RStan, it is highly recommended that you install R version 4.0 or above. Note that prior to installing RStan, you need to configure your R installation to be able to compile C++ code. For instructions, see [RStan Getting Started](https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started) under **Configuring C++ Toolchain**. Note that instructions vary depending on your operating system, and if you are using Windows, instructions will also vary depending on your R version (3.6/4.0/4.2). 
 
 ## Package version requirements
 Running the source code requires the following packages:
