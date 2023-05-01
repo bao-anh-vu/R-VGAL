@@ -6,13 +6,12 @@
 
 rm(list = ls())
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("readxl") # part of tidyverse
 library("dplyr")
 library("tensorflow")
 library("mvtnorm")
 library("rstan")
-# library("car")
 library("gridExtra")
 library("ggplot2")
 library("reshape2")
