@@ -1,6 +1,6 @@
 ## Logistic mixed model with POLYPHARMACY data ##
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
 library("readxl") # part of tidyverse
 library("dplyr")
