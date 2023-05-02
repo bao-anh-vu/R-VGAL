@@ -3,7 +3,9 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
                       temper_schedule = rep(0.25, 4),
                       n_post_samples = 10000,
                       save_results = F) {
-  
+
+  tf64 <- function(x) tf$constant(x, dtype = "float64")
+    
   if (!use_tempering) {
     temper_schedule <- 1
   }
@@ -81,16 +83,16 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       TempMat <- tf$linalg$matmul(X_i_tf5, beta_tf_3) + alpha_tf_3
       
-      log_pi <- -tf$math$log(1 + tf$exp(-TempMat))
-      log_1_minus_pi <- -TempMat - tf$math$log(1 + tf$exp(-TempMat))
-      log_likelihood <- y_tf3 * log_pi + (1 - y_tf3) * log_1_minus_pi
+      log_pi <- -tf$math$log(tf64(1) + tf$exp(-TempMat))
+      log_1_minus_pi <- -TempMat - tf$math$log(tf64(1) + tf$exp(-TempMat))
+      log_likelihood <- y_tf3 * log_pi + (tf64(1) - y_tf3) * log_1_minus_pi
       log_weights_all <- tf$math$reduce_sum(log_likelihood, c(2L, 3L))
       
       shifted_weights_all_tf <-log_weights_all - tf$math$reduce_max(log_weights_all, 1L, keepdims = TRUE)
       normalised_weights_all_tf <- tf$exp(shifted_weights_all_tf) /
         tf$math$reduce_sum(tf$exp(shifted_weights_all_tf), 1L, keepdims = TRUE)
       
-      scalars_tf <- tf$squeeze(y_tf3 - tf$math$reciprocal(1 + tf$exp(-TempMat)))
+      scalars_tf <- tf$squeeze(y_tf3 - tf$math$reciprocal(tf64(1) + tf$exp(-TempMat)))
       scalars_tf2 <- tf$linalg$diag(scalars_tf)
       
       
@@ -100,21 +102,21 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       grad_beta_tf <- tf$math$reduce_sum(grad_j_tf, axis = 3L, keepdims = TRUE)
       
-      grad_omega_tf <- -1/2 + 1/2 * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
+      grad_omega_tf <- tf64(-1/2) + tf64(1/2) * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
                                                    tf$exp(omega_tf_3))
       
       grad_theta_tf <- tf$concat(list(grad_beta_tf, grad_omega_tf),
                                  2L)
       
-      probs_tf <-   tf$squeeze(tf$math$reciprocal(1 + tf$exp(-TempMat)))
-      rho_tf <- tf$linalg$diag(probs_tf * (1 - probs_tf))
+      probs_tf <-   tf$squeeze(tf$math$reciprocal(tf64(1) + tf$exp(-TempMat)))
+      rho_tf <- tf$linalg$diag(probs_tf * (tf64(1) - probs_tf))
       
       grad2_beta_tf <- -tf$linalg$matmul(
         tf$linalg$matmul(
           tf$linalg$matrix_transpose(X_i_tf5),
           rho_tf),
         X_i_tf5)
-      grad2_omega_tf <- -1/2 * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
+      grad2_omega_tf <- tf64(-1/2) * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
                                               tf$exp(omega_tf_3))
       
       

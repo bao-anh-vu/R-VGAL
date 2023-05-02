@@ -161,12 +161,13 @@ run_est_rvgal <- function(y, X, Z, mu_0, P_0, S = 1000L, S_alpha = 1000L,
                                   tf$linalg$matmul(tf$linalg$matrix_transpose(X_i_tf5),
                                                    y_minus_mean_tf))
       
-      grad_phi_tf <- -1/2 + tf$multiply(1/(2*exp_phi_s_all_tf4), tf$square(alpha_i_samples_tf2)) 
+        grad_phi_tf <- tf$constant(-1/2, dtype = "float64") +
+            tf$multiply(tf$math$reciprocal(2*exp_phi_s_all_tf4), tf$square(alpha_i_samples_tf2)) 
       
-      grad_psi_tf <- -n/2 + tf$multiply(tf$math$reciprocal(2 * exp_psi_s_all_tf4), 
-                                        tf$linalg$matmul(tf$linalg$matrix_transpose(y_minus_mean_tf), 
-                                                         y_minus_mean_tf)
-      )
+        grad_psi_tf <- tf$constant(-n/2, dtype = "float64") +
+            tf$multiply(tf$math$reciprocal(2 * exp_psi_s_all_tf4), 
+                        tf$linalg$matmul(tf$linalg$matrix_transpose(y_minus_mean_tf), 
+                                                         y_minus_mean_tf))
       
       grad_theta_tf <- tf$concat(list(grad_beta_tf, grad_phi_tf, grad_psi_tf),
                                  2L)
