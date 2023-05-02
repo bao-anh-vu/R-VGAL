@@ -24,9 +24,9 @@ source("./source/run_stan_lmm.R")
 
 date <- "20230329"
 regenerate_data <- F
-rerun_est_rvgal <- T
-rerun_exact_rvgal <- T
-rerun_hmc <- T
+rerun_est_rvgal <- F
+rerun_exact_rvgal <- F
+rerun_hmc <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -34,7 +34,7 @@ save_data <- F
 save_est_rvgal_results <- F
 save_exact_rvgal_results <- F
 save_hmc_results <- F
-save_plots <- F
+save_plots <- T
 
 if (use_tempering) {
   n_obs_to_temper <- 10
