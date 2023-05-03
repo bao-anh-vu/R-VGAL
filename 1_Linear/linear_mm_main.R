@@ -34,7 +34,7 @@ save_data <- F
 save_est_rvgal_results <- F
 save_exact_rvgal_results <- F
 save_hmc_results <- F
-save_plots <- T
+save_plots <- F
 
 if (use_tempering) {
   n_obs_to_temper <- 10
