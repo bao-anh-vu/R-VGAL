@@ -6,7 +6,7 @@
 
 rm(list=ls())
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("readxl") # part of tidyverse
 library("dplyr")
 library("tensorflow")

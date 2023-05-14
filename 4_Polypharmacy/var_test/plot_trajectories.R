@@ -1,7 +1,6 @@
 ## Compare trajectories of the parameters with and without tempering
 
 library(ggplot2)
-# library(ggmatplot)
 
 date <- "20230327_1"
 S <- 1000
@@ -69,24 +68,3 @@ for (p in 1:param_dim) {
 if (save_images) {
   dev.off()
 }
-
-
-## ggplot ver 
-# plots <- list()
-# 
-# p <- 1
-# param_names <- c("beta1", "beta2", "beta3", "beta4", 
-#                  "beta5", "beta6", "beta7", "beta8", "tau") 
-# sims <- rep(1:10, each = 501)
-# notemper.df <- data.frame(sim = sims, 
-#                           vals = c(trajectories_notemper[[p]]))
-# 
-# temper.df <- data.frame(sim = sims, 
-#                           vals = c(trajectories_temper[[p]]))
-# test <- rbind(trajectories_notemper[[p]], trajectories_temper[[p]])
-# group <- rep(c("notemp", "temp"), each = nrow(trajectories_notemper[[p]]))
-# notemper.df <- data.frame(g = group, val = test)
-# 
-# plot <- ggmatplot(notemper.df, col = g, plot_type = "line")
-#         
-# print(plot)
