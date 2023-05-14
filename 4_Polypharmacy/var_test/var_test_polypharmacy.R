@@ -6,7 +6,7 @@
 
 rm(list = ls())
 
-# reticulate::use_condaenv("tf2.11", required = TRUE)
+reticulate::use_condaenv("tf2.11", required = TRUE)
 library("readxl") # part of tidyverse
 library("dplyr")
 library("tensorflow")
@@ -22,7 +22,7 @@ source("./source/run_rvgal.R")
 
 ## Flags
 date <- "20230327_1"
-rerun_test <- T
+rerun_test <- F
 save_results <- F
 save_images <- F
 reorder_data <- F #this is only for reordering the data ONCE, then that order is fixed for all runs
@@ -40,8 +40,8 @@ if (use_tempering) {
 }
 
 runs <- 10 # number of R-VGAL runs
-S <- 100L
-S_alpha <- 100L
+S <- 500L
+S_alpha <- 500L
 
 ## Read data
 data <- read_excel("./data/polypharm.xls")
@@ -180,38 +180,6 @@ if (rerun_test) {
 ##              Plot results            ##
 ###########################################
 
-## Plot parameter trajectories
-subscripts <- c("0", "gender", "race", "age", "M1", "M2", "M3", "IM")
-
-param_trajectories <- list()
-for (p in 1:param_dim) {
-  param_trajectories[[p]] <- sapply(results, function(r) r$mean_trajectories[[p]])
-}
-
-if (save_images) {
-  filename2 = paste0("trajectories", temper_info, reorder_info,
-                     "_S", S, "_Sa", S_alpha, "_", date, ".png")
-  filepath2 = paste0("./var_test/plots/", filename2)
-  
-  png(filepath2, width = 700, height = 500)
-}
-
-par(mfrow = c(3, 3))
-for (p in 1:param_dim) {
-  if (p == param_dim) { ## if the parameter is tau
-    matplot(sqrt(exp(param_trajectories[[p]])), type = "l", xlab = "Iterations",
-            ylab = expression(tau), main = "")
-  } else {
-    matplot(param_trajectories[[p]], type = "l", xlab = "Iterations",
-            ylab = bquote(beta[.(subscripts[p])]), main = "")
-  }
-  
-}
-
-if (save_images) {
-  dev.off()  
-}
-
 ## Plot posterior densities
 
 ## HMC posterior for comparison
@@ -236,6 +204,7 @@ for (r in 1:length(results)) {
   post_samples_list[[r]] <- rmvnorm(n_post_samples, post_mu, post_var)
 }
 
+subscripts <- c("0", "gender", "race", "age", "M1", "M2", "M3", "IM")
 param_plots <- list()
 for (p in 1:param_dim) {
   
@@ -259,22 +228,23 @@ for (p in 1:param_dim) {
       geom_density(data = hmc.df, aes(x = samples), col = "black") +
       theme_bw() +
       theme(legend.position="none") +
-      labs(x = bquote(tau))
+      labs(x = bquote(tau)) +
+      theme(text = element_text(size = 18))
   } else {
     plot <- ggplot(post_samples_df_long, aes(x = value)) + #geom_line(aes(colour = series))
       geom_density(aes(col = run)) +
       geom_density(data = hmc.df, aes(x = samples), col = "black") +
       theme_bw() +
       theme(legend.position="none") +
-      labs(x = bquote(beta[.(subscripts[p])]))
+      labs(x = bquote(beta[.(subscripts[p])])) + 
+      theme(text = element_text(size = 18))
   }
   
   param_plots[[p]] <- plot
 }
-
-## Saving the plots
 grid.arrange(grobs = param_plots, nrow = 3, ncol = 3)
 
+## Saving the plots
 if (save_images) {
   plot_directory <- paste0("./var_test/plots/")
   plot_file = paste0("var_test", temper_info, reorder_info,

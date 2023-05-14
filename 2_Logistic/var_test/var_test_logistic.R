@@ -6,7 +6,7 @@
 
 rm(list=ls())
 
-# reticulate::use_condaenv("tf2.11", required = TRUE)
+reticulate::use_condaenv("tf2.11", required = TRUE)
 library("readxl") # part of tidyverse
 library("dplyr")
 library("tensorflow")
@@ -25,15 +25,15 @@ regenerate_data <- F
 save_data <- F
 rerun_test <- T
 rerun_stan <- F
-save_results <- F
+save_results <- T
 save_hmc_results <- F
 reorder_data <- F
 use_tempering <- T
-save_images <- F
+save_images <- T
 
 runs <- 10 # number of R-VGAL runs
-S <- 100L
-S_alpha <- 100L
+S <- 1000L
+S_alpha <- 1000L
 
 if (reorder_data) {
   reorder_seed <- 2023
@@ -253,7 +253,7 @@ for (p in 1:param_dim) {
       theme_bw() +
       theme(legend.position="none") +
       labs(x = bquote(tau)) + 
-      theme(text = element_text(size = 20)) 
+      theme(text = element_text(size = 26)) 
   } else {
     plot <- ggplot(post_samples_df_long, aes(x = value)) + #geom_line(aes(colour = series))
       geom_density(aes(col = run), linewidth = 1) +
@@ -263,7 +263,7 @@ for (p in 1:param_dim) {
       theme_bw() +
       theme(legend.position="none") +
       labs(x = bquote(beta[.(subscripts[p])])) +
-      theme(text = element_text(size = 20)) 
+      theme(text = element_text(size = 26)) 
   }
   
   param_plots[[p]] <- plot
@@ -273,7 +273,7 @@ grid.arrange(grobs = param_plots, nrow = 1, ncol = 5)
 
 ## Saving the plots
 if (save_images) {
-  plot_directory <- paste0("./plots/var_test_", date, "/")
+  plot_directory <- paste0("./var_test/plots/")
   plot_file = paste0("logistic_var_test", temper_info, reorder_info,
                     "_S", S, "_Sa", S_alpha, "_", date, ".png")
   

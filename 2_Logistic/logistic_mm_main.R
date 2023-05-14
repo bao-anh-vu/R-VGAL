@@ -191,25 +191,27 @@ plots <- list()
 
 for (p in 1:(param_dim-1)) {
   plot <- ggplot(rvga.df, aes(x=.data[[param_names[p]]])) + 
-    geom_density(col = "red") +
-    geom_density(data = hmc.df, col = "blue") +
+    geom_density(col = "red", lwd = 1) +
+    geom_density(data = hmc.df, col = "blue", lwd = 1) +
     geom_vline(data = true_vals.df, aes(xintercept=.data[[param_names[p]]]),
                color="black", linetype="dashed", linewidth = 0.75) +
     labs(x = bquote(beta[.(p)])) +
-    theme_bw()
-  theme(axis.title = element_blank())
+    theme_bw() +
+    theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
   
   plots[[p]] <- plot  
 }
 
 tau_plot <- ggplot(rvga.df, aes(x=tau)) + 
-  geom_density(col = "red") +
-  geom_density(data = hmc.df, col = "blue") +
+  geom_density(col = "red", lwd = 1) +
+  geom_density(data = hmc.df, col = "blue", lwd = 1) +
   geom_vline(data = true_vals.df, aes(xintercept=tau),
              color="black", linetype="dashed", linewidth = 0.75) +
   labs(x = expression(tau)) +
   theme_bw() +
-  theme(axis.title = element_blank())
+  theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) 
 
 plots[[param_dim]] <- tau_plot
 
@@ -232,16 +234,17 @@ for (ind in 1:n_lower_tri) {
   p <- mat_ind[1]
   q <- mat_ind[2]
   
-  param_df <- data.frame(x = param_values[p], y = param_values[q])
+  param_df <- data.frame(x = param_values[q], y = param_values[p])
   
-  cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[p]]], y = .data[[param_names[q]]])) +
-    stat_ellipse(col = "goldenrod", type = "norm") +
-    stat_ellipse(data = rvga.df, col = "red", type = "norm") +
-    stat_ellipse(data = hmc.df, col = "blue", type = "norm") +
+  cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
+    stat_ellipse(col = "goldenrod", type = "norm", lwd = 1) +
+    stat_ellipse(data = rvga.df, col = "red", type = "norm", lwd = 1) +
+    stat_ellipse(data = hmc.df, col = "blue", type = "norm", lwd = 1) +
     geom_point(data = param_df, aes(x = x, y = y),
-               shape = 4, color = "black", size = 2) +
+               shape = 4, color = "black", size = 4) +
     theme_bw() +
-    theme(axis.title = element_blank())
+    theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) 
   
   cov_plots[[ind]] <- cov_plot
 }
@@ -256,6 +259,7 @@ gr3 <- gtable_add_grob(gr2, grobs = lapply(plots, ggplotGrob), t = 1:5, l = 1:5)
 # A list of text grobs - the labels
 vars <- list(textGrob(bquote(beta[1])), textGrob(bquote(beta[2])), textGrob(bquote(beta[3])), 
              textGrob(bquote(beta[4])), textGrob(bquote(tau)))
+vars <- lapply(vars, editGrob, gp = gpar(col = "black", fontsize = 20))
 
 # So that there is space for the labels,
 # add a row to the top of the gtable,
@@ -279,7 +283,7 @@ if (save_plots) {
   plot_file <- paste0("logistic_posterior", temper_info, reorder_info,
                       "_S", S, "_Sa", S_alpha, "_", date, ".png")
   filepath = paste0("./plots/", plot_file)
-  png(filepath, width = 800, height = 600)
+  png(filepath, width = 1000, height = 700)
   grid.newpage()
   grid.draw(gp)
   dev.off()

@@ -208,11 +208,12 @@ plots <- list()
 
 for (p in 1:(param_dim-1)) {
   plot <- ggplot(rvga.df, aes(x = .data[[param_names[p]]])) + 
-    geom_density(col = "red") +
-    geom_density(data = hmc.df, col = "blue") +
+    geom_density(col = "red", lwd = 1) +
+    geom_density(data = hmc.df, col = "blue", lwd = 1) +
     labs(x = bquote(beta[.(p)])) +
     theme_bw() + 
-    theme(axis.title = element_blank())
+    theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
   # theme(legend.position="bottom") + 
   # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
   
@@ -220,11 +221,12 @@ for (p in 1:(param_dim-1)) {
 }
 
 tau_plot <- ggplot(rvga.df, aes(x=tau)) + 
-  geom_density(col = "red") +
-  geom_density(data = hmc.df, col = "blue") +
+  geom_density(col = "red", lwd = 1) +
+  geom_density(data = hmc.df, col = "blue", lwd = 1) +
   theme_bw() +
   labs(x = expression(tau)) +
-  theme(axis.title = element_blank())
+  theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
 
 plots[[param_dim]] <- tau_plot
 
@@ -244,11 +246,12 @@ for (ind in 1:n_lower_tri) {
   p <- mat_ind[1]
   q <- mat_ind[2]
   
-  cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[p]]], y = .data[[param_names[q]]])) +
-    stat_ellipse(col = "red", type = "norm") +
-    stat_ellipse(data = hmc.df, col = "blue", type = "norm") +
+  cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
+    stat_ellipse(col = "red", type = "norm", lwd = 1) +
+    stat_ellipse(data = hmc.df, col = "blue", type = "norm", lwd = 1) +
     theme_bw() +
-    theme(axis.title = element_blank())
+    theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) 
   
   cov_plots[[ind]] <- cov_plot
 }
@@ -264,6 +267,7 @@ gr3 <- gtable_add_grob(gr2, grobs = lapply(plots, ggplotGrob), t = 1:param_dim, 
 # A list of text grobs - the labels
 vars <- list(textGrob(bquote(beta[0])), textGrob(bquote(beta[age])), 
              textGrob(bquote(beta[smoke])), textGrob(bquote(tau)))
+vars <- lapply(vars, editGrob, gp = gpar(col = "black", fontsize = 20))
 
 # So that there is space for the labels,
 # add a row to the top of the gtable,
@@ -287,7 +291,7 @@ if (save_plots) {
   plot_file <- paste0("sixcity_posterior", temper_info, reorder_info,
                       "_S", S, "_Sa", S_alpha, "_", date, ".png")
   filepath = paste0("./plots/", plot_file)
-  png(filepath, width = 800, height = 550)
+  png(filepath, width = 900, height = 600)
   grid.newpage()
   grid.draw(gp)
   dev.off()

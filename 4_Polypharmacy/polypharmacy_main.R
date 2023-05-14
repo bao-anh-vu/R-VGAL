@@ -242,11 +242,12 @@ plots <- list()
 
 for (p in 1:(param_dim-1)) {
   plot <- ggplot(rvgal.df, aes(x = .data[[param_names[p]]])) + 
-    geom_density(col = "red") +
-    geom_density(data = hmc.df, col = "blue") +
+    geom_density(col = "red", lwd = 1) +
+    geom_density(data = hmc.df, col = "blue", lwd = 1) +
     labs(x = bquote(beta[.(p)])) +
     theme_bw() + 
-    theme(axis.title = element_blank())
+    theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
   # theme(legend.position="bottom") + 
   # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
   
@@ -254,11 +255,12 @@ for (p in 1:(param_dim-1)) {
 }
 
 tau_plot <- ggplot(rvgal.df, aes(x=tau)) + 
-  geom_density(col = "red") +
-  geom_density(data = hmc.df, col = "blue") +
+  geom_density(col = "red", lwd = 1) +
+  geom_density(data = hmc.df, col = "blue", lwd = 1) +
   labs(x = expression(tau)) +
   theme_bw() + 
-  theme(axis.title = element_blank())
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
 
 plots[[param_dim]] <- tau_plot
 
@@ -284,12 +286,13 @@ for (ind in 1:n_lower_tri) {
   q <- mat_ind[2]
   
   # cov_plot <- ggplot(rvgal.df, aes_string(x = param_names[p], y = param_names[q])) +
-  cov_plot <- ggplot(rvgal.df, aes(x = .data[[param_names[p]]], y = .data[[param_names[q]]])) +
-    stat_ellipse(col = "goldenrod", type = "norm") +
-    stat_ellipse(data = rvgal.df, col = "red", type = "norm") +
-    stat_ellipse(data = hmc.df, col = "blue", type = "norm") +
+  cov_plot <- ggplot(rvgal.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
+    stat_ellipse(col = "goldenrod", type = "norm", lwd = 1) +
+    stat_ellipse(data = rvgal.df, col = "red", type = "norm", lwd = 1) +
+    stat_ellipse(data = hmc.df, col = "blue", type = "norm", lwd = 1) +
     theme_bw() +
-    theme(axis.title = element_blank())
+    theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
   
   cov_plots[[ind]] <- cov_plot
 }
@@ -307,6 +310,7 @@ vars <- list(textGrob(bquote(beta[0])), textGrob(bquote(beta[gender])),
              textGrob(bquote(beta[M1])), textGrob(bquote(beta[M2])), 
              textGrob(bquote(beta[M3])), textGrob(bquote(beta[IM])), 
              textGrob(bquote(tau)))
+vars <- lapply(vars, editGrob, gp = gpar(col = "black", fontsize = 20))
 
 # So that there is space for the labels,
 # add a row to the top of the gtable,
