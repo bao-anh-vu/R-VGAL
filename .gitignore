@@ -2,3 +2,8 @@ archived/
 .Rproj.user/
 .RData
 .Rhistory
+1_Linear/results/
+2_Logistic/results/
+3_Sixcity/results/
+4_Polypharmacy/results/
+5_Poisson/results/
