@@ -44,16 +44,16 @@ parameters {
 
 transformed parameters {
   
-  cov_matrix[r] Sigma_eta_mat;
+  cov_matrix[r] Sigma_alpha;
   matrix[r,r] L;
   
   L = to_lowertri(gamma, r);
-  Sigma_eta_mat = L*L';
+  Sigma_alpha = L*L';
 }
     
 model {
   gamma ~ normal(prior_mean_gamma, diag_prior_var_gamma);
-  alpha ~ multi_normal(rep_vector(0, r), Sigma_eta_mat);
+  alpha ~ multi_normal(rep_vector(0, r), Sigma_alpha);
   beta ~ normal(prior_mean_beta, diag_prior_var_beta);
   for(i in 1:N) {
     // y[n] ~ bernoulli(inv_logit(a[g[n]] + x[n]*beta));

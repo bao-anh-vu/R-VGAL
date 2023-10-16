@@ -7,8 +7,10 @@ setwd("/home/babv971/R-VGAL/5_Poisson/")
 
 rm(list=ls())
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
+tfp <- import("tensorflow_probability")
+tfd <- tfp$distributions
 library(keras)
 library("dplyr")
 library("mvtnorm")
@@ -49,10 +51,10 @@ source("./source/compute_joint_llh_tf.R")
 date <- "20231013"  
 regenerate_data <- F
 rerun_rvga <- T
-rerun_stan <- F
+rerun_stan <- T
 save_data <- F
 save_rvgal_results <- T
-save_hmc_results <- F
+save_hmc_results <- T
 save_plots <- F
 reorder_data <- F
 use_tempering <- T
@@ -116,8 +118,8 @@ hist(unlist(y))
 ###################
 ##     R-VGA     ##
 ###################
-S <- 50L
-S_alpha <- 100L
+S <- 20L
+S_alpha <- 20L
 
 ## Set up result directory
 if (use_tempering) {
@@ -165,11 +167,11 @@ for (k in 1:length(mu_0)) {
 
 if (rerun_rvga) {
   rvgal_results <- run_rvgal(y, X, Z, mu_0, P_0, 
-                            S = S, S_alpha = S_alpha,
-                            n_post_samples = n_post_samples,
-                            use_tempering = use_tempering, 
-                            n_temper = n_obs_to_temper, 
-                            temper_schedule = a_vals_temper)
+                             S = S, S_alpha = S_alpha,
+                             n_post_samples = n_post_samples,
+                             use_tempering = use_tempering, 
+                             n_temper = n_obs_to_temper, 
+                             temper_schedule = a_vals_temper)
   
   if (save_rvgal_results) {
     saveRDS(rvgal_results, file = paste0(result_directory, results_file))
@@ -188,7 +190,7 @@ rvgal.post_samples <- rvgal_results$post_samples
 rvgal.Sigma_post_samples <- list()
 for (k in 1:n_post_samples) {
   rvgal.Sigma_post_samples[[k]] <- construct_Sigma(rvgal.post_samples[k, -(1:n_fixed_effects)], 
-                                             n_random_effects)
+                                                   n_random_effects)
 }
 
 nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
@@ -214,40 +216,39 @@ n_chains <- 1
 hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
-
+  
   ## Data manipulation ##
   y_long <- unlist(y) #as.vector(t(y))
   X_long <- do.call("rbind", X)
   Z_long <- do.call("rbind", Z)
   
   hfit <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
-                         n_chains = n_chains, data = y_long,
-                         grouping = rep(1:N, each = n), n_groups = N,
-                         fixed_covariates = X_long,
-                         rand_covariates = Z_long,
-                         save_results = save_hmc_results,
-                         prior_mean = mu_0,
-                         prior_var = P_0)
-
+                           n_chains = n_chains, data = y_long,
+                           grouping = rep(1:N, each = n), n_groups = N,
+                           fixed_covariates = X_long,
+                           rand_covariates = Z_long,
+                           save_results = save_hmc_results,
+                           prior_mean = mu_0,
+                           prior_var = P_0)
+  
   if (save_hmc_results) {
     saveRDS(hfit, file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
   }
-
+  
 } else {
   hfit <- readRDS(file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
-
+  
 }
 
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]", 
-                                  "Sigma_eta_mat[1,1]", "Sigma_eta_mat[2,1]",
-                                  "Sigma_eta_mat[2,2]", "Sigma_eta_mat[3,1]",
-                                  "Sigma_eta_mat[3,2]", "Sigma_eta_mat[3,3]"),
-                                   permuted = F, inc_warmup = F)
+param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+                 "Sigma_alpha[2,1]",
+                 "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
+                 "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
 
-hmc.summ <- summary(hfit, pars = c("beta[1]","beta[2]", "Sigma_eta_mat[1,1]", 
-                                   "Sigma_eta_mat[2,1]",
-                                   "Sigma_eta_mat[2,2]", "Sigma_eta_mat[3,1]",
-                                   "Sigma_eta_mat[3,2]", "Sigma_eta_mat[3,3]"))$summary
+hmc.fit <- extract(hfit, pars = param_names,
+                   permuted = F, inc_warmup = F)
+
+hmc.summ <- summary(hfit, pars = param_names)$summary
 hmc.n_eff <- hmc.summ[, "n_eff"]
 hmc.Rhat <- hmc.summ[, "Rhat"]
 
@@ -257,12 +258,12 @@ hmc.Rhat <- hmc.summ[, "Rhat"]
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
-    hmc.samples[, p] <- rbind(hmc.fit[, , p])
+  hmc.samples[, p] <- rbind(hmc.fit[, , p])
 }
 
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
 for (p in 1:param_dim) {
-  plot(density(hmc.samples[, p]), main = "Posterior samples")
+  plot(density(hmc.samples[, p]), main = param_names[p])
   lines(density(rvgal.post_samples[, p]), col = "red")
   abline(v = true_vals[p], lty = 2)
 }
