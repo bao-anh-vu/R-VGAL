@@ -4,7 +4,7 @@
 
 run_stan_poisson <- function(iters, burn_in, n_chains, data, grouping, n_groups, 
                            fixed_covariates, rand_covariates, 
-                           prior_mean, prior_var, save_results = T) {
+                           prior_mean, prior_var) {
   
   poisson_code <- "./source/poisson_mm.stan"
     
@@ -21,20 +21,41 @@ run_stan_poisson <- function(iters, burn_in, n_chains, data, grouping, n_groups,
                        g = grouping, 
                        nlower = nlower,
                        prior_mean_beta = prior_mean[1:p],
-                       diag_prior_var_beta = diag(prior_var)[1:p],
+                       diag_prior_var_beta = sqrt(diag(prior_var)[1:p]),
                        prior_mean_gamma = prior_mean[-(1:p)],
-                       diag_prior_var_gamma = diag(prior_var)[-(1:p)]
+                       diag_prior_var_gamma = sqrt(diag(prior_var)[-(1:p)])
   )
   
   hfit <- stan(file = poisson_code, 
                model_name="poisson_mm", data = poisson_data, 
                iter = iters, warmup = burn_in, chains=n_chains)
   
-  if (save_results) {
-    saveRDS(hfit, file = paste0("poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
+  
+  if (r == 2) {
+    param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+                     "Sigma_alpha[2,1]", "Sigma_alpha[2,2]")
+    
+  } else {
+    param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+                     "Sigma_alpha[2,1]",
+                     "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
+                     "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
   }
   
-  return(hfit)
+  hmc.fit <- extract(hfit, pars = param_names,
+                     permuted = F, inc_warmup = T)
+  
+  hmc.summ <- summary(hfit, pars = param_names)$summary
+  hmc.n_eff <- hmc.summ[, "n_eff"]
+  hmc.Rhat <- hmc.summ[, "Rhat"]
+  
+  hmc_results <- list(post_samples = hmc.fit,
+                      summary = hmc.summ,
+                      n_eff = hmc.n_eff,
+                      Rhat = hmc.Rhat, 
+                      time = get_elapsed_time(hfit))
+  
+  return(hmc_results)
 }
 
 

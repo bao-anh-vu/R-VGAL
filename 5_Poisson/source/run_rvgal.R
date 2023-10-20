@@ -51,45 +51,59 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       P <- chol2inv(chol(prec_temp))
       samples <- rmvnorm(S, mu_temp, P)
       
+      samples_list <- lapply(1:S, function(r) samples[r, -(1:n_fixed_effects)])
+      
       log_likelihood <- list()
       grads <- list()
       hessians <- list()
-      # joint_grads <- list()
-      # joint_hessians <- list()
+      
+      n_fixed_effects <- ncol(X[[i]])
+      n_random_effects <- ncol(Z[[i]])
+      
+      y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
+      X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
+      Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
+      
+      # theta_tf <- tf$Variable(samples, dtype = "float64")
+      
+      # beta_l <- samples[, 1:n_fixed_effects]
+      # 
+      # Sigma_alpha_all <- lapply(samples_list, construct_Sigma, 
+      #                           d = n_random_effects)
+      # alpha_all <- lapply(Sigma_alpha_all, 
+      #                     function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
+      # 
+      # alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
+      # theta_tf <- tf$Variable(samples, dtype = "float64")
+      # 
+      # browser()
+      
       for (l in 1:S) {
         theta_l <- samples[l, ]
         
-        # beta_l <- samples[s, 1:n_fixed_effects]
-        # ## Construct Sigma_alpha here
-        # Sigma_alpha_l - construct_Sigma(samples[l, -(1:n_fixed_effects)],
-        #                                d = n_random_effects)
-        # 
-        # alpha_l <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
-        # 
-        # log_likelihood_l <- c()
-        
-        n_fixed_effects <- ncol(X[[i]])
-        n_random_effects <- ncol(Z[[i]])
-
         beta_l <- theta_l[1:n_fixed_effects]
-
+        
         Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
-                                       d = n_random_effects)
-
+                                         d = n_random_effects)
+        
         # Now we need a for loop from s = 1, ..., S_alpha
         # and do importance sampling
-
-        alpha_i <- t(rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l))
+        
+        alpha_i <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
         alpha_i_tf <- tf$Variable(alpha_i)
-
-        y_i_tf <- tf$Variable(y[[i]])
-        X_i_tf <- tf$Variable(X[[i]])
-        Z_i_tf <- tf$Variable(Z[[i]])
-        theta_l_tf <- tf$Variable(theta_l)
-
+        
+        # plot(density(rmvnorm(1000L, rep(0, n_random_effects), Sigma_alpha_l)[, 1]))
+        # browser()
+        # L <- t(chol(Sigma_alpha_l))
+        
+        # norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L)
+        # alpha_i_test <- norm$sample(S_alpha)
+        
+        theta_l_tf <- tf$Variable(theta_l, dtype = "float64")
+        
         ## test compute_grad_hessian
         tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
-                                     alpha_i_tf, theta_l_tf)
+                                       alpha_i_tf, theta_l_tf)
         
         tf_grad <- tf_out$grad
         tf_hessian <- tf_out$hessian
@@ -161,6 +175,14 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       ## Now do the same in tensorflow
       
       prec_temp <- prec_temp - a * E_hessian
+      
+      if (i == 14) {
+        browser()
+      }
+      
+      if (any(eigen(prec_temp)$values < 0)) {
+        browser()
+      }
       mu_temp <- mu_temp + a * chol2inv(chol(prec_temp)) %*% E_grad    
       
     }
@@ -183,15 +205,15 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   # rvgal.post_samples_beta <- rvgal.post_samples[, 1:n_fixed_effects]
   
   rvgal_results <- list(mu = mu_vals,
-                       prec = prec,
-                       post_samples = rvgal.post_samples,
-                       S = S,
-                       S_alpha = S_alpha,
-                       N = N, 
-                       n = n,
-                       use_tempering = use_tempering,
-                       temper_schedule = temper_schedule,
-                       time_elapsed = t2 - t1)
+                        prec = prec,
+                        post_samples = rvgal.post_samples,
+                        S = S,
+                        S_alpha = S_alpha,
+                        N = N, 
+                        n = n,
+                        use_tempering = use_tempering,
+                        temper_schedule = temper_schedule,
+                        time_elapsed = t2 - t1)
   
   return(rvgal_results)
 }
@@ -258,7 +280,7 @@ to_triangular <- function (x, d) { ## for stan
 }
 
 poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) { 
-                                     # beta, alpha_i, Sigma_alpha) {
+  # beta, alpha_i, Sigma_alpha) {
   ## Construct parameters on the unstransformed scale
   n_fixed_effects <- ncol(X_i)
   n_random_effects <- ncol(Z_i)
@@ -266,7 +288,7 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   beta <- theta[1:n_fixed_effects]
   
   Sigma_alpha <- construct_Sigma(theta[-(1:n_fixed_effects)], 
-                                d = n_random_effects)
+                                 d = n_random_effects)
   
   ## Now we need a for loop from s = 1, ..., S_alpha
   ## and do importance sampling

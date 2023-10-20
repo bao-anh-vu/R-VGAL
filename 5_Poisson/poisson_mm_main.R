@@ -7,8 +7,10 @@ setwd("/home/babv971/R-VGAL/5_Poisson/")
 
 rm(list=ls())
 
-reticulate::use_condaenv("tf2.11", required = TRUE)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
+tfp <- import("tensorflow_probability")
+tfd <- tfp$distributions
 library(keras)
 library("dplyr")
 library("mvtnorm")
@@ -46,16 +48,19 @@ source("./source/generate_data.R")
 source("./source/compute_joint_llh_tf.R")
 
 ## Flags
-date <- "20231013"  
+date <- "20231018" #"20231013" has 3 random effects, "20231018" has 2  
 regenerate_data <- F
 rerun_rvga <- T
-rerun_stan <- F
+rerun_stan <- T
 save_data <- F
 save_rvgal_results <- T
-save_hmc_results <- F
+save_hmc_results <- T
+plot_prior <- F
 save_plots <- F
 reorder_data <- F
-use_tempering <- T
+use_tempering <- F
+
+plot_trace <- F
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -64,23 +69,23 @@ if (use_tempering) {
 }
 
 n_post_samples <- 10000
-n_random_effects <- 3
+n_random_effects <- 2
 
 ## Generate data
 set.seed(2023)
-N <- 200L #number of individuals
+N <- 100L #number of individuals
 n <- 10L # number of responses per individual
 beta <- c(-0.5, 0.25) #, 0.5, 0.25)
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
-if (date == "20231013_0") {
-  Sigma_alpha <- diag(c(0.1, 0.2, 0.3))
+if (grepl("_0", date)) {
+  Sigma_alpha <- 0.1*diag(1:n_random_effects)
 } else {
   L <- matrix(0, n_random_effects, n_random_effects)
   L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
   Sigma_alpha <- tcrossprod(L)
-  Sigma_alpha <- Sigma_alpha + 0.1*diag(n_random_effects)
+  Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
 }
 
 if (regenerate_data) {
@@ -112,12 +117,13 @@ if (reorder_data) {
   X <- reordered_X
 }
 
-hist(unlist(y))
+# hist(unlist(y))
+
 ###################
 ##     R-VGA     ##
 ###################
-S <- 50L
-S_alpha <- 100L
+S <- 10L
+S_alpha <- 10L
 
 ## Set up result directory
 if (use_tempering) {
@@ -143,33 +149,64 @@ n_elements_L <- n_random_effects + n_random_effects * (n_random_effects - 1)/2
 param_dim <- n_fixed_effects + n_elements_L
 
 beta_0 <- rep(0, n_fixed_effects)
-l_vec_0 <- c(rep(-1, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
+l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
 mu_0 <- c(beta_0, l_vec_0)
 P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
 
 ## Plot prior samples first
-L_true <- t(chol(Sigma_alpha))
-true_params <- c(beta, c(L_true[lower.tri(L_true, diag = T)]))
-prior_samples <- rmvnorm(1000, mu_0, P_0)
-par(mfrow = c(2,4))
-for (k in 1:length(mu_0)) {
-  if (k <= n_fixed_effects) { # if the coefficient is beta
-    plot(density(prior_samples[, k]))
-  } else if (k >= n_fixed_effects && k < (n_fixed_effects + n_random_effects)) {
-    plot(density(exp(prior_samples[, k])))
-  } else {
-    plot(density(prior_samples[, k]))
-  }
-  abline(v = true_params[k])
+if (n_random_effects == 2) {
+  param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+                   "Sigma_alpha[2,1]", "Sigma_alpha[2,2]")
+  
+} else {
+  param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+                   "Sigma_alpha[2,1]",
+                   "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
+                   "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
 }
+
+if (plot_prior) {
+  
+  n_prior_samples <- 1000
+  prior_samples <- rmvnorm(n_prior_samples, mu_0, P_0)
+  
+  rvgal.Sigma_prior_samples <- list()
+  for (k in 1:n_prior_samples) {
+    rvgal.Sigma_prior_samples[[k]] <- construct_Sigma(prior_samples[k, -(1:n_fixed_effects)], 
+                                                      n_random_effects)
+  }
+  
+  rvgal.prior_samples <- matrix(NA, nrow = n_prior_samples, ncol = param_dim)
+  rvgal.prior_samples[, 1:n_fixed_effects] <- prior_samples[, 1:n_fixed_effects]
+  
+  nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
+  lower_ind <- lapply(1:nlower, index_to_i_j_rowwise_diag)
+  for (d in 1:(param_dim - n_fixed_effects)) {
+    inds <- lower_ind[[d]]
+    rvgal.prior_samples[, n_fixed_effects+d] <- unlist(lapply(rvgal.Sigma_prior_samples, function(Sigma) Sigma[inds[1], inds[2]]))
+  }
+  
+  
+  par(mfrow = c(2,3))
+  true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
+  for (p in 1:param_dim) {
+    plot(density(rvgal.prior_samples[, p]))
+    abline(v = true_vals[p], lty = 2)
+  }
+  
+}
+
+#################
+##     R-VGA   ##
+#################
 
 if (rerun_rvga) {
   rvgal_results <- run_rvgal(y, X, Z, mu_0, P_0, 
-                            S = S, S_alpha = S_alpha,
-                            n_post_samples = n_post_samples,
-                            use_tempering = use_tempering, 
-                            n_temper = n_obs_to_temper, 
-                            temper_schedule = a_vals_temper)
+                             S = S, S_alpha = S_alpha,
+                             n_post_samples = n_post_samples,
+                             use_tempering = use_tempering, 
+                             n_temper = n_obs_to_temper, 
+                             temper_schedule = a_vals_temper)
   
   if (save_rvgal_results) {
     saveRDS(rvgal_results, file = paste0(result_directory, results_file))
@@ -188,14 +225,13 @@ rvgal.post_samples <- rvgal_results$post_samples
 rvgal.Sigma_post_samples <- list()
 for (k in 1:n_post_samples) {
   rvgal.Sigma_post_samples[[k]] <- construct_Sigma(rvgal.post_samples[k, -(1:n_fixed_effects)], 
-                                             n_random_effects)
+                                                   n_random_effects)
 }
 
 nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
 lower_ind <- lapply(1:nlower, index_to_i_j_rowwise_diag)
 for (d in 1:(param_dim - n_fixed_effects)) {
   inds <- lower_ind[[d]]
-  print(inds)
   rvgal.post_samples[, n_fixed_effects+d] <- unlist(lapply(rvgal.Sigma_post_samples, function(Sigma) Sigma[inds[1], inds[2]]))
 }
 
@@ -214,42 +250,41 @@ n_chains <- 1
 hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
-
+  
   ## Data manipulation ##
   y_long <- unlist(y) #as.vector(t(y))
   X_long <- do.call("rbind", X)
   Z_long <- do.call("rbind", Z)
   
-  hfit <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
-                         n_chains = n_chains, data = y_long,
-                         grouping = rep(1:N, each = n), n_groups = N,
-                         fixed_covariates = X_long,
-                         rand_covariates = Z_long,
-                         save_results = save_hmc_results,
-                         prior_mean = mu_0,
-                         prior_var = P_0)
-
+  hmc_results <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
+                           n_chains = n_chains, data = y_long,
+                           grouping = rep(1:N, each = n), n_groups = N,
+                           fixed_covariates = X_long,
+                           rand_covariates = Z_long,
+                           prior_mean = mu_0,
+                           prior_var = P_0)
+  
   if (save_hmc_results) {
-    saveRDS(hfit, file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
   }
-
+  
 } else {
-  hfit <- readRDS(file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
-
+  hmc_results <- readRDS(file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
+  
 }
 
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]", 
-                                  "Sigma_eta_mat[1,1]", "Sigma_eta_mat[2,1]",
-                                  "Sigma_eta_mat[2,2]", "Sigma_eta_mat[3,1]",
-                                  "Sigma_eta_mat[3,2]", "Sigma_eta_mat[3,3]"),
-                                   permuted = F, inc_warmup = F)
+# param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+#                  "Sigma_alpha[2,1]",
+#                  "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
+#                  "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
+# 
+# hmc.fit <- extract(hfit, pars = param_names,
+#                    permuted = F, inc_warmup = F)
 
-hmc.summ <- summary(hfit, pars = c("beta[1]","beta[2]", "Sigma_eta_mat[1,1]", 
-                                   "Sigma_eta_mat[2,1]",
-                                   "Sigma_eta_mat[2,2]", "Sigma_eta_mat[3,1]",
-                                   "Sigma_eta_mat[3,2]", "Sigma_eta_mat[3,3]"))$summary
-hmc.n_eff <- hmc.summ[, "n_eff"]
-hmc.Rhat <- hmc.summ[, "Rhat"]
+hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
+hmc.summ <- hmc_results$summary
+hmc.n_eff <- hmc_results$n_eff
+hmc.Rhat <- hmc_results$Rhat
 
 ######################## Results #########################
 
@@ -257,12 +292,16 @@ hmc.Rhat <- hmc.summ[, "Rhat"]
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
-    hmc.samples[, p] <- rbind(hmc.fit[, , p])
+  if (length(dim(hmc.fit)) < 3) {
+    hmc.samples[, p] <- rbind(hmc.fit[, p])
+  } else {
+    hmc.samples[, p] <- rbind(hmc.fit[, , p]) 
+  }
 }
 
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
 for (p in 1:param_dim) {
-  plot(density(hmc.samples[, p]), main = "Posterior samples")
+  plot(density(hmc.samples[, p]), main = param_names[p])
   lines(density(rvgal.post_samples[, p]), col = "red")
   abline(v = true_vals[p], lty = 2)
 }
@@ -404,7 +443,24 @@ for (p in 1:param_dim) {
 # } 
 # 
 ## Time benchmark
-hmc.time <- sum(colSums(get_elapsed_time(hfit)))
+hmc.time <- hmc_results$time
 rvga.time <- rvgal_results$time_elapsed
 print(hmc.time)
 print(rvga.time)
+
+## Trajectory for R-VGA
+if (plot_trace) {
+  trajectories <- list()
+  for (p in 1:param_dim) {
+    trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
+    plot(trajectories[[p]], main = param_names[p], type = "l")
+  }
+  
+  ## HMC traceplots
+  par(mfrow = c(ceiling(param_dim/2)), 2)
+  for (p in 1:param_dim) {
+    plot(hmc.fit[,,p], type = "l", main = param_names[p])
+    abline(h = true_vals[p], lty = 2, col = "red")
+  }
+  
+}

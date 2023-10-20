@@ -41,62 +41,80 @@ compute_grad_hessian <- tf_function(
     
     return(list(grad = grad, hessian = hessian))    
   }, 
-  reduce_retracing = T
-)
-
-
+  reduce_retracing = T)
 
 
 compute_joint_llh_tf <- tf_function(
   compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta) {
-  
-  with (tf$GradientTape() %as% tape2, {
-    with (tf$GradientTape(persistent = TRUE) %as% tape1, {
-      ## Construct parameters on the untransformed scale
-      n_fixed_effects <- as.integer(ncol(X_i))#tf$cast(ncol(X_i), dtype = "int64")
-      n_random_effects <- as.integer(ncol(Z_i)) #tf$cast(ncol(Z_i), dtype = "int64")
-      param_dim <- as.integer(length(theta))
-      # n <- tf$cast(length(y_i), dtype = "int64")
-      S_alpha <- as.integer(ncol(alpha_i))
-      
-      beta_tf <- tf$cast(theta[1:n_fixed_effects], dtype = "float64")
-      
-      Lsamples_tf <- fill_lower_tri(n_random_effects, theta[(n_fixed_effects+1):param_dim])
-      Lsamples_tf <- tf$cast(Lsamples_tf, dtype = "float64")
-      Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
-      
-      # Need to replicate and reshape beta S_alpha times here
-      # so that we then have S_alpha "samples" of lambda_i
-      beta_tf_reshape <- tf$reshape(beta_tf, c(1L, dim(beta_tf)))
-      beta_tf_tiled <- tf$transpose(tf$tile(beta_tf_reshape, c(S_alpha, 1L)))
-      
-      lambda_i_tf <- tf$exp(tf$linalg$matmul(X_i, beta_tf_tiled) + tf$linalg$matmul(Z_i, alpha_i))
-      lambda_i_tf_reshape <- tf$transpose(tf$reshape(lambda_i_tf, c(1L, dim(lambda_i_tf))))
-      
-      ## Now compute the likelihood here
-      y_i <- tf$cast(y_i, dtype = "float64")
-      y_i_reshape <- tf$reshape(y_i, c(1L, 1L, dim(y_i)))
-      y_i_tiled <- tf$tile(y_i_reshape, c(S_alpha, 1L, 1L))
-      
-      llh_y_i_tf <- tf$squeeze(tf$linalg$matmul(y_i_tiled, tf$math$log(lambda_i_tf_reshape))) -
-        tf$reduce_sum(lambda_i_tf, 0L) -
-        tf$squeeze(tf$reduce_sum(tf$math$lgamma(y_i_tiled + 1), 2L))
-      ## these can be used as the log weights too
-      
-      Lsamples_tf_reshape <- tf$reshape(Lsamples_tf, c(1L, dim(Lsamples_tf)))
-      Lsamples_tf_tiled <- tf$tile(Lsamples_tf_reshape, c(S_alpha, 1L, 1L))
-      alpha_i_reshape <- tf$transpose(tf$reshape(alpha_i, c(1L, dim(alpha_i))))
-      
-      Amat <- tf$linalg$matmul(tf$linalg$inv(Lsamples_tf_tiled), alpha_i_reshape)
-      
-      llh_alpha_i_tf <- - tf$reduce_sum(tf$math$log(tf$linalg$diag_part(Lsamples_tf_tiled)), 1L) -
-        tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
-        1/2 * tf$squeeze(tf$linalg$matmul(tf$transpose(Amat, perm = c(0L, 2L, 1L)), Amat))
-      
-      log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
-      # log_likelihood_tf <- tf$reshape(log_likelihood_tf, c(1L, dim(log_likelihood_tf)))
-        # return(list(llh = log_likelihood_tf))
+    
+    with (tf$GradientTape() %as% tape2, {
+      with (tf$GradientTape(persistent = TRUE) %as% tape1, {
+        ## Construct parameters on the untransformed scale
+        n_fixed_effects <- as.integer(ncol(X_i))#tf$cast(ncol(X_i), dtype = "int64")
+        n_random_effects <- as.integer(ncol(Z_i)) #tf$cast(ncol(Z_i), dtype = "int64")
+        param_dim <- as.integer(length(theta))
+        # n <- tf$cast(length(y_i), dtype = "int64")
+        S_alpha <- as.integer(nrow(alpha_i))
+        
+        beta_tf <- theta[1:n_fixed_effects]
+        
+        Lsamples_tf <- fill_lower_tri(n_random_effects, theta[(n_fixed_effects+1):param_dim])
+        # Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
+        
+        ## Sample alpha_i here
+        # alpha_i_og <- alpha_i
+        # 
+        norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = Lsamples_tf)
+        # alpha_i <- norm$sample(S_alpha)
+        
+        # lines(density(as.matrix(alpha_i_test)[, 1]), col = "red")
+        Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
+        
+        # Need to replicate and reshape beta S_alpha times here
+        # so that we then have S_alpha "samples" of lambda_i
+        beta_tf_reshape <- tf$reshape(beta_tf, c(1L, dim(beta_tf)))
+        beta_tf_tiled <- tf$transpose(tf$tile(beta_tf_reshape, c(S_alpha, 1L)))
+        
+        lambda_i_tf <- tf$exp(tf$linalg$matmul(X_i, beta_tf_tiled) + tf$linalg$matmul(Z_i, tf$transpose(alpha_i)))
+        # lambda_i_tf_test <- tf$exp(tf$linalg$matmul(X_i, beta_tf_tiled) + tf$linalg$matmul(Z_i, tf$transpose(alpha_i_test)))
+
+        lambda_i_tf_reshape <- tf$transpose(tf$reshape(lambda_i_tf, c(1L, dim(lambda_i_tf))))
+        
+        ## Now compute the likelihood here
+        # y_i <- tf$cast(y_i, dtype = "float64")
+        # y_i_reshape <- tf$reshape(y_i, c(1L, 1L, dim(y_i)))
+        # y_i_tiled <- tf$tile(y_i_reshape, c(S_alpha, 1L, 1L))
+        
+        # llh_y_i_tf <- tf$squeeze(tf$linalg$matmul(y_i_tiled, tf$math$log(lambda_i_tf_reshape))) -
+        #   tf$reduce_sum(lambda_i_tf, 0L) -
+        #   tf$squeeze(tf$reduce_sum(tf$math$lgamma(y_i_tiled + 1), 2L))
+        ## these can be used as the log weights too
+        
+        y_i_reshape <- tf$reshape(y_i, c(1L, dim(y_i)))
+        y_i_tiled <- tf$tile(y_i_reshape, c(S_alpha, 1L))
+        
+        pois <- tfd$Poisson(rate = tf$transpose(lambda_i_tf))
+        llh_y_i_tf_s <- pois$log_prob(y_i_tiled)
+        llh_y_i_tf <- tf$reduce_sum(llh_y_i_tf_s, 1L)
+        
+        # Lsamples_tf_reshape <- tf$reshape(Lsamples_tf, c(1L, dim(Lsamples_tf)))
+        # Lsamples_tf_tiled <- tf$tile(Lsamples_tf_reshape, c(S_alpha, 1L, 1L))
+        # alpha_i_reshape <- tf$reshape(alpha_i, c(dim(alpha_i), 1L))
+        # 
+        # Amat <- tf$linalg$matmul(tf$linalg$inv(Lsamples_tf_tiled), alpha_i_reshape)
+        # 
+        # llh_alpha_i_tf <- - tf$reduce_sum(tf$math$log(tf$linalg$diag_part(Lsamples_tf_tiled)), 1L) -
+        #   tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
+        #   1/2 * tf$squeeze(tf$linalg$matmul(tf$transpose(Amat, perm = c(0L, 2L, 1L)), Amat))
+        
+        llh_alpha_i_tf <- norm$log_prob(alpha_i)
+        # llh_alpha_i_og <- norm$log_prob(alpha_i_og)
+        norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = Lsamples_tf)
+        llh_alpha_i_tf <- norm$log_prob(alpha_i)
+        
+        log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
       })
+      
       grad_tf %<-% tape1$jacobian(log_likelihood_tf, theta)
       
     })
@@ -109,9 +127,6 @@ compute_joint_llh_tf <- tf_function(
     log_w_shifted <- log_weights - max_weight
     sum_weights <- tf$math$reduce_sum(tf$exp(log_w_shifted))
     weights <- tf$divide(tf$math$exp(log_w_shifted), sum_weights) # normalised weights
-    # 
-    # weighted_grads <- tf$math$multiply(weights, grad_tf) # or something like that
-    
     
     return(list(llh = log_likelihood_tf,
                 grad = grad_tf,
@@ -148,7 +163,7 @@ fill_lower_tri <- function(dim, vals) {
   
   ## need to reshape indices here
   # shape <- tf$cast(c(d, d), dtype="int64")
-  out = tf$SparseTensor(indices, numlower, 
+  out = tf$SparseTensor(indices, vals[(d+1):(d+nlower)], #numlower, 
                         dense_shape = tf$cast(c(d, d), dtype="int64"))
   lower_tri = tf$sparse$to_dense(out)
   L = diag_mat + lower_tri
