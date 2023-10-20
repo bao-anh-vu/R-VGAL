@@ -60,6 +60,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       n_fixed_effects <- ncol(X[[i]])
       n_random_effects <- ncol(Z[[i]])
       
+<<<<<<< HEAD
       y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
       X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
       Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
@@ -81,6 +82,20 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       for (l in 1:S) {
         theta_l <- samples[l, ]
         
+=======
+      for (l in 1:S) {
+        theta_l <- samples[l, ]
+        
+        # beta_l <- samples[s, 1:n_fixed_effects]
+        # ## Construct Sigma_alpha here
+        # Sigma_alpha_l - construct_Sigma(samples[l, -(1:n_fixed_effects)],
+        #                                d = n_random_effects)
+        # 
+        # alpha_l <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
+        # 
+        # log_likelihood_l <- c()
+        
+>>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
         beta_l <- theta_l[1:n_fixed_effects]
         
         Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
@@ -92,6 +107,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
         alpha_i <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
         alpha_i_tf <- tf$Variable(alpha_i)
         
+<<<<<<< HEAD
         # plot(density(rmvnorm(1000L, rep(0, n_random_effects), Sigma_alpha_l)[, 1]))
         # browser()
         # L <- t(chol(Sigma_alpha_l))
@@ -99,6 +115,11 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
         # norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L)
         # alpha_i_test <- norm$sample(S_alpha)
         
+=======
+        y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
+        X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
+        Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
+>>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
         theta_l_tf <- tf$Variable(theta_l, dtype = "float64")
         
         ## test compute_grad_hessian
