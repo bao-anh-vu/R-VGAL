@@ -55,10 +55,7 @@ rerun_stan <- T
 save_data <- F
 save_rvgal_results <- T
 save_hmc_results <- T
-<<<<<<< HEAD
 plot_prior <- F
-=======
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
 save_plots <- F
 reorder_data <- F
 use_tempering <- F
@@ -125,13 +122,8 @@ if (reorder_data) {
 ###################
 ##     R-VGA     ##
 ###################
-<<<<<<< HEAD
 S <- 10L
 S_alpha <- 10L
-=======
-S <- 20L
-S_alpha <- 20L
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
 
 ## Set up result directory
 if (use_tempering) {
@@ -264,19 +256,11 @@ if (rerun_stan) {
   X_long <- do.call("rbind", X)
   Z_long <- do.call("rbind", Z)
   
-<<<<<<< HEAD
   hmc_results <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
-=======
-  hfit <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
                            n_chains = n_chains, data = y_long,
                            grouping = rep(1:N, each = n), n_groups = N,
                            fixed_covariates = X_long,
                            rand_covariates = Z_long,
-<<<<<<< HEAD
-=======
-                           save_results = save_hmc_results,
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
                            prior_mean = mu_0,
                            prior_var = P_0)
   
@@ -285,7 +269,6 @@ if (rerun_stan) {
   }
   
 } else {
-<<<<<<< HEAD
   hmc_results <- readRDS(file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
   
 }
@@ -302,23 +285,6 @@ hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
 hmc.summ <- hmc_results$summary
 hmc.n_eff <- hmc_results$n_eff
 hmc.Rhat <- hmc_results$Rhat
-=======
-  hfit <- readRDS(file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
-  
-}
-
-param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
-                 "Sigma_alpha[2,1]",
-                 "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
-                 "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
-
-hmc.fit <- extract(hfit, pars = param_names,
-                   permuted = F, inc_warmup = F)
-
-hmc.summ <- summary(hfit, pars = param_names)$summary
-hmc.n_eff <- hmc.summ[, "n_eff"]
-hmc.Rhat <- hmc.summ[, "Rhat"]
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
 
 ######################## Results #########################
 
@@ -326,15 +292,11 @@ hmc.Rhat <- hmc.summ[, "Rhat"]
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
-<<<<<<< HEAD
   if (length(dim(hmc.fit)) < 3) {
     hmc.samples[, p] <- rbind(hmc.fit[, p])
   } else {
     hmc.samples[, p] <- rbind(hmc.fit[, , p]) 
   }
-=======
-  hmc.samples[, p] <- rbind(hmc.fit[, , p])
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
 }
 
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
@@ -484,7 +446,6 @@ for (p in 1:param_dim) {
 hmc.time <- hmc_results$time
 rvga.time <- rvgal_results$time_elapsed
 print(hmc.time)
-<<<<<<< HEAD
 print(rvga.time)
 
 ## Trajectory for R-VGA
@@ -503,6 +464,3 @@ if (plot_trace) {
   }
   
 }
-=======
-print(rvga.time)
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38

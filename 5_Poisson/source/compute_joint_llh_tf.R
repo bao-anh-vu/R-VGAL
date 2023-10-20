@@ -41,12 +41,8 @@ compute_grad_hessian <- tf_function(
     
     return(list(grad = grad, hessian = hessian))    
   }, 
-<<<<<<< HEAD
-  reduce_retracing = T)
-=======
   reduce_retracing = T
 )
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
 
 
 compute_joint_llh_tf <- tf_function(
@@ -64,7 +60,6 @@ compute_joint_llh_tf <- tf_function(
         beta_tf <- theta[1:n_fixed_effects]
         
         Lsamples_tf <- fill_lower_tri(n_random_effects, theta[(n_fixed_effects+1):param_dim])
-<<<<<<< HEAD
         # Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
         
         ## Sample alpha_i here
@@ -74,8 +69,6 @@ compute_joint_llh_tf <- tf_function(
         # alpha_i <- norm$sample(S_alpha)
         
         # lines(density(as.matrix(alpha_i_test)[, 1]), col = "red")
-=======
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
         Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
         
         # Need to replicate and reshape beta S_alpha times here
@@ -84,11 +77,8 @@ compute_joint_llh_tf <- tf_function(
         beta_tf_tiled <- tf$transpose(tf$tile(beta_tf_reshape, c(S_alpha, 1L)))
         
         lambda_i_tf <- tf$exp(tf$linalg$matmul(X_i, beta_tf_tiled) + tf$linalg$matmul(Z_i, tf$transpose(alpha_i)))
-<<<<<<< HEAD
         # lambda_i_tf_test <- tf$exp(tf$linalg$matmul(X_i, beta_tf_tiled) + tf$linalg$matmul(Z_i, tf$transpose(alpha_i_test)))
 
-=======
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
         lambda_i_tf_reshape <- tf$transpose(tf$reshape(lambda_i_tf, c(1L, dim(lambda_i_tf))))
         
         ## Now compute the likelihood here
@@ -118,11 +108,8 @@ compute_joint_llh_tf <- tf_function(
         #   tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
         #   1/2 * tf$squeeze(tf$linalg$matmul(tf$transpose(Amat, perm = c(0L, 2L, 1L)), Amat))
         
-<<<<<<< HEAD
         llh_alpha_i_tf <- norm$log_prob(alpha_i)
         # llh_alpha_i_og <- norm$log_prob(alpha_i_og)
-=======
->>>>>>> de81486c3c5044c42801ea161f30fe4184194a38
         norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = Lsamples_tf)
         llh_alpha_i_tf <- norm$log_prob(alpha_i)
         
