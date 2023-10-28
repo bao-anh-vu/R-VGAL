@@ -17,7 +17,8 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   # n_random_effects <- as.integer(ncol(Z[[1]]))
   
   param_dim <- as.integer(length(mu_0))
-  
+  N <- length(y)
+  n <- length(y[[1]])
   ## Sample from the "prior"
   ## par(mfrow = c(1, 1))
   ## test_omega <- rnorm(10000, mu_0[param_dim], P_0[param_dim, param_dim])
@@ -30,9 +31,9 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
     
     cat("i = ", i, "\n")
     
-    if (S >= 500 && S_alpha >= 500) {
+    # if (S >= 500 && S_alpha >= 500) {
       gc()
-    }
+    # }
     
     a_vals <- 1 # for tempering
     if (use_tempering) {
@@ -64,20 +65,20 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
       Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
       
-      # theta_tf <- tf$Variable(samples, dtype = "float64")
       
-      # beta_l <- samples[, 1:n_fixed_effects]
-      # 
-      # Sigma_alpha_all <- lapply(samples_list, construct_Sigma, 
-      #                           d = n_random_effects)
-      # alpha_all <- lapply(Sigma_alpha_all, 
-      #                     function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
-      # 
-      # alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
-      # theta_tf <- tf$Variable(samples, dtype = "float64")
-      # 
-      # browser()
+      ####### Development ###########
+      beta_all <- samples[, 1:n_fixed_effects]
+
+      Sigma_alpha_all <- lapply(samples_list, construct_Sigma,
+                                d = n_random_effects)
+      alpha_all <- lapply(Sigma_alpha_all,
+                          function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
+
+      prior_var_beta <- diag(P_0)[1:n_fixed_effects]
       
+      I_d <- diag(n_random_effects)
+        
+      log_likelihood <- list()
       for (l in 1:S) {
         theta_l <- samples[l, ]
         
@@ -85,105 +86,156 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
         
         Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
                                          d = n_random_effects)
+        alpha_l <- alpha_all[[l]]
         
-        # Now we need a for loop from s = 1, ..., S_alpha
-        # and do importance sampling
+        grad_beta <- list()
+        grad_zeta <- list()
         
-        alpha_i <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
-        alpha_i_tf <- tf$Variable(alpha_i)
+        W <- t(chol(Sigma_alpha_l))
+        W_inv <- solve(W)
         
-        # plot(density(rmvnorm(1000L, rep(0, n_random_effects), Sigma_alpha_l)[, 1]))
-        # browser()
-        # L <- t(chol(Sigma_alpha_l))
+        for (s in 1:S_alpha) {
+          alpha_l_s <- alpha_l[s, ]
+          
+          grad_beta[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
+          
+          I_zeta <- diag(alpha_l_s)
+          I_zeta[lower.tri(I_zeta)] <- 1
+          A <- t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
+          grad_zeta[[s]] <- I_d[lower.tri(I_d, diag = T)] + 
+            I_zeta[lower.tri(I_zeta, diag = T)] * A[lower.tri(A, diag = T)]
+        }
         
-        # norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L)
-        # alpha_i_test <- norm$sample(S_alpha)
-        
-        theta_l_tf <- tf$Variable(theta_l, dtype = "float64")
-        
-        ## test compute_grad_hessian
-        tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
-                                       alpha_i_tf, theta_l_tf)
-        
-        tf_grad <- tf_out$grad
-        tf_hessian <- tf_out$hessian
-        
-        grads[[l]] <- as.vector(tf_grad)
-        hessians[[l]] <- as.matrix(tf_hessian)
-        ########################################################################
-        # 
-        # tf_out <- compute_joint_llh_tf(y_i_tf, X_i_tf, Z_i_tf,
-        #                                           alpha_i_tf, theta_l_tf)
-        # 
-        # log_likelihood_tf <- tf_out$llh
-        # joint_grads <- tf_out$grad # this is only the gradient of the joint llh
-        # joint_hessians <- tf_out$hessian
-        # 
-        # joint_grads <- lapply(1:S_alpha, function(r) as.vector(joint_grads[r,]))
-        # joint_hessians <- lapply(1:S_alpha, function(r) as.matrix(joint_hessians[r,,]))
-        # 
-        # # log_weights_tf <- tf_out$log_weights
-        # weights <- as.list(tf_out$weights)
-        # 
-        # ############# Test with the usual for loop ##############
-        # # test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]], 
-        # #                                            alpha_i, theta_l, S_alpha)
-        # # log_likelihood <- test$llh
-        # # llh_y <- test$llh_y
-        # # 
-        # # lambda_i <- exp(X_i %*% beta + Z_i %*% alpha_i_s)
-        # # llh_y_i_s <- dpois(y_i, lambda_i, log = T)
-        # # llh_y_i_s <- sum(llh_y_i_s)
-        # # 
-        # # ## Weights for importance sampling
-        # # log_weights <- c()
-        # # for (s in 1:S_alpha) { # parallelise later
-        # #   lambda_i_s <- exp(X[[i]] %*% beta + Z[[i]] %*% alpha_i[, s])
-        # #   llh_y_i_s <- dpois(y[[i]], lambda_i_s, log = T)
-        # #   log_weights[s] <- sum(llh_y_i_s)
-        # # }
-        # # log_w_shifted <- log_weights - max(log_weights)
-        # # weights <- as.list(exp(log_w_shifted)/sum(exp(log_w_shifted))) # normalised weights
-        # # 
-        # ################ end for loop ##################
-        # 
-        # weighted_grads <- Map('*', weights, joint_grads)
-        # # log_likelihood[[l]] <- poisson_joint_likelihood(y_i = y[[i]], X_i = X[[i]], 
-        # #                                              Z_i = Z[[i]], theta = theta_l,
-        # #                                              alpha_i = alpha_i,
-        # #                                              S_alpha = S_alpha)$llh
-        # grads[[l]] <- Reduce("+", weighted_grads)
-        # 
-        # 
-        # 
-        # ## Now the Hessian
-        # hess_part1 <- tcrossprod(grads[[l]])
-        # 
-        # joint_grad_crossprod <- lapply(joint_grads, tcrossprod)
-        # unweighted_hess <- Map('+', joint_grad_crossprod, joint_hessians)
-        # weighted_hess <- Map('*', weights, unweighted_hess)
-        # hess_part2 <- Reduce("+", weighted_hess)
-        # 
-        # hessians[[l]] <- hess_part2 - hess_part1
-        # 
-        # browser()
-        
-      }
-      E_grad <- Reduce("+", grads)/ length(grads)
-      E_hessian <- Reduce("+", hessians)/ length(hessians)
-      
-      ## Now do the same in tensorflow
-      
-      prec_temp <- prec_temp - a * E_hessian
-      
-      if (i == 14) {
-        browser()
+        ## likelihood seems ok -- same between TF and for loop
+        # test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
+        #                                  alpha_all[[l]], theta_l, S_alpha)
+        # log_likelihood[[l]] <- test$llh
+        # llh_y <- test$llh_y
       }
       
-      if (any(eigen(prec_temp)$values < 0)) {
-        browser()
-      }
-      mu_temp <- mu_temp + a * chol2inv(chol(prec_temp)) %*% E_grad    
+      ############ TF #############
+      
+      alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
+      theta_tf <- tf$Variable(samples, dtype = "float64")
+
+      ##  
+      tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf,
+                                      alpha_all_tf, theta_tf)
+      tf_grad <- tf_out$grad
+      tf_grad_1 <- tf_grad[1,,]
+      tf_grad_beta <- tf_grad_1[, 1:n_fixed_effects]
+      tf_grad_zeta <- tf_grad_1[, (n_fixed_effects+1):param_dim]
+      
+      browser()
+      ##
+      
+      tf_out2 <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
+                                     alpha_all_tf, theta_tf)
+      
+      E_score_tf <- tf$math$reduce_mean(tf_out2$grad, 0L)
+      E_hessian_tf <- tf$math$reduce_mean(tf_out2$hessian, 0L)
+      prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
+      mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))
+      # 
+      ###### end dev ###############
+      ## Check against gradient from Tan and Nott
+            
+      
+      #   
+      #   # Now we need a for loop from s = 1, ..., S_alpha
+      #   # and do importance sampling
+      #   
+      #   # alpha_i <- rmvnorm(S_alpha, rep(0, n_random_effects), Sigma_alpha_l)
+      #   alpha_i <- alpha_all[[1]]
+      #   alpha_i_tf <- tf$Variable(alpha_i)
+      #   
+      #   # plot(density(rmvnorm(1000L, rep(0, n_random_effects), Sigma_alpha_l)[, 1]))
+      #   # browser()
+      #   # L <- t(chol(Sigma_alpha_l))
+      #   
+      #   # norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L)
+      #   # alpha_i_test <- norm$sample(S_alpha)
+      #   
+      #   theta_l_tf <- tf$Variable(theta_l, dtype = "float64")
+      #   
+      #   ## test compute_grad_hessian
+      #   tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
+      #                                  alpha_i_tf, theta_l_tf)
+      #   
+      #   tf_grad <- tf_out$grad
+      #   tf_hessian <- tf_out$hessian
+      #   
+      #   grads[[l]] <- as.vector(tf_grad)
+      #   hessians[[l]] <- as.matrix(tf_hessian)
+      #   ########################################################################
+      #   # 
+      #   # tf_out <- compute_joint_llh_tf(y_i_tf, X_i_tf, Z_i_tf,
+      #   #                                           alpha_i_tf, theta_l_tf)
+      #   # 
+      #   # log_likelihood_tf <- tf_out$llh
+      #   # joint_grads <- tf_out$grad # this is only the gradient of the joint llh
+      #   # joint_hessians <- tf_out$hessian
+      #   # 
+      #   # joint_grads <- lapply(1:S_alpha, function(r) as.vector(joint_grads[r,]))
+      #   # joint_hessians <- lapply(1:S_alpha, function(r) as.matrix(joint_hessians[r,,]))
+      #   # 
+      #   # # log_weights_tf <- tf_out$log_weights
+      #   # weights <- as.list(tf_out$weights)
+      #   # 
+        ############ Test with the usual for loop ##############
+      #   test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
+      #                                              alpha_i, theta_l, S_alpha)
+      #   log_likelihood <- test$llh
+      #   llh_y <- test$llh_y
+      # 
+      #   lambda_i <- exp(X_i %*% beta + Z_i %*% alpha_i_s)
+      #   llh_y_i_s <- dpois(y_i, lambda_i, log = T)
+      #   llh_y_i_s <- sum(llh_y_i_s)
+      # 
+      #   ## Weights for importance sampling
+      #   log_weights <- c()
+      #   for (s in 1:S_alpha) { # parallelise later
+      #     lambda_i_s <- exp(X[[i]] %*% beta + Z[[i]] %*% alpha_i[, s])
+      #     llh_y_i_s <- dpois(y[[i]], lambda_i_s, log = T)
+      #     log_weights[s] <- sum(llh_y_i_s)
+      #   }
+      #   log_w_shifted <- log_weights - max(log_weights)
+      #   weights <- as.list(exp(log_w_shifted)/sum(exp(log_w_shifted))) # normalised weights
+      #   
+      # }
+      #   browser()
+      #   # ################ end for loop ##################
+      #   # 
+      #   # weighted_grads <- Map('*', weights, joint_grads)
+      #   # # log_likelihood[[l]] <- poisson_joint_likelihood(y_i = y[[i]], X_i = X[[i]], 
+      #   # #                                              Z_i = Z[[i]], theta = theta_l,
+      #   # #                                              alpha_i = alpha_i,
+      #   # #                                              S_alpha = S_alpha)$llh
+      #   # grads[[l]] <- Reduce("+", weighted_grads)
+      #   # 
+      #   # 
+      #   # 
+      #   # ## Now the Hessian
+      #   # hess_part1 <- tcrossprod(grads[[l]])
+      #   # 
+      #   # joint_grad_crossprod <- lapply(joint_grads, tcrossprod)
+      #   # unweighted_hess <- Map('+', joint_grad_crossprod, joint_hessians)
+      #   # weighted_hess <- Map('*', weights, unweighted_hess)
+      #   # hess_part2 <- Reduce("+", weighted_hess)
+      #   # 
+      #   # hessians[[l]] <- hess_part2 - hess_part1
+      #   # 
+      # }
+      # 
+      # E_grad <- Reduce("+", grads)/ length(grads)
+      # E_hessian <- Reduce("+", hessians)/ length(hessians)
+      # 
+      # prec_temp <- prec_temp - a * E_hessian
+      # 
+      # if (any(eigen(prec_temp)$values < 0)) {
+      #   browser()
+      # }
+      # mu_temp <- mu_temp + a * chol2inv(chol(prec_temp)) %*% E_grad    
       
     }
     
@@ -298,7 +350,7 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   llh <- c()  
   llh_y <- c()
   for (s in 1:S_alpha) {
-    alpha_i_s <- alpha_i[, s]
+    alpha_i_s <- alpha_i[s, ]
     
     # llh_y_i_s <- c()
     # for (j in 1:length(y_i)) {
@@ -306,7 +358,6 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
     #   # llh_y_i[j] <- y_i[j] * log(lambda_ij) - lambda_ij - log(factorial(y_i[j]))
     #   llh_y_i_s[j] <- dpois(y_i[j], lambda_ij, log = T)
     # }
-    
     lambda_i <- exp(X_i %*% beta + Z_i %*% alpha_i_s)
     llh_y_i_s <- dpois(y_i, lambda_i, log = T)
     llh_y_i_s <- sum(llh_y_i_s)

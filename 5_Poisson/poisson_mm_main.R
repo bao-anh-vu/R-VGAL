@@ -19,6 +19,7 @@ library("gridExtra")
 library("grid")
 library("gtable")
 library(coda)
+library(matrixcalc)
 
 # List physical devices
 gpus <- tf$config$experimental$list_physical_devices('GPU')
@@ -28,7 +29,7 @@ if (length(gpus) > 0) {
     # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
     tf$config$experimental$set_virtual_device_configuration(
       gpus[[1]],
-      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4*4096))
     )
     
     logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
@@ -45,20 +46,21 @@ if (length(gpus) > 0) {
 source("./source/run_rvgal.R")
 source("./source/run_stan_poisson.R")
 source("./source/generate_data.R")
-source("./source/compute_joint_llh_tf.R")
+# source("./source/compute_joint_llh_tf.R")
+source("./source/compute_grad_hessian_all.R")
 
 ## Flags
 date <- "20231018" #"20231013" has 3 random effects, "20231018" has 2  
-regenerate_data <- F
+regenerate_data <- T
 rerun_rvga <- T
 rerun_stan <- T
 save_data <- F
-save_rvgal_results <- T
-save_hmc_results <- T
+save_rvgal_results <- F
+save_hmc_results <- F
 plot_prior <- F
 save_plots <- F
 reorder_data <- F
-use_tempering <- F
+use_tempering <- T
 
 plot_trace <- F
 
@@ -73,9 +75,9 @@ n_random_effects <- 2
 
 ## Generate data
 set.seed(2023)
-N <- 100L #number of individuals
+N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-0.5, 0.25) #, 0.5, 0.25)
+beta <- c(0.5, -0.75) #  c(-0.5, 0.25)#, 0.5, 0.25)
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
@@ -92,10 +94,10 @@ if (regenerate_data) {
   poisson_data <- generate_data(N = N, n = n, beta = beta, 
                                 Sigma_alpha = Sigma_alpha)
   if (save_data) {
-    saveRDS(poisson_data, file = paste0("./data/poisson_data_N", N, "_n", n, "_", date, ".rds"))
+    saveRDS(poisson_data, file = paste0("./data/poisson_data_N", N, "_n", n, "_", n_random_effects, "d_", date, ".rds"))
   }
 } else {
-  poisson_data <- readRDS(file = paste0("./data/poisson_data_N", N, "_n", n, "_", date, ".rds"))
+  poisson_data <- readRDS(file = paste0("./data/poisson_data_N", N, "_n", n, "_", n_random_effects, "d_", date, ".rds"))
 }
 
 y <- poisson_data$y
@@ -122,8 +124,8 @@ if (reorder_data) {
 ###################
 ##     R-VGA     ##
 ###################
-S <- 10L
-S_alpha <- 10L
+S <- 20L
+S_alpha <- 20L
 
 ## Set up result directory
 if (use_tempering) {
@@ -137,7 +139,7 @@ if (reorder_data) {
 } else {
   reorder_info <- ""
 }
-result_directory <- "./results/"
+result_directory <- paste0("./results/", n_random_effects, "d/")
 results_file <- paste0("poisson_mm_rvga", temper_info, reorder_info, 
                        "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, ".rds")
 
@@ -299,6 +301,7 @@ for (p in 1:param_dim) {
   }
 }
 
+par(mfrow = c(n_random_effects, ceiling(param_dim/n_random_effects)))
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
 for (p in 1:param_dim) {
   plot(density(hmc.samples[, p]), main = param_names[p])
@@ -454,13 +457,18 @@ if (plot_trace) {
   for (p in 1:param_dim) {
     trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
     plot(trajectories[[p]], main = param_names[p], type = "l")
+    abline(h = true_vals[p], lty = 2, col = "red")
   }
   
   ## HMC traceplots
-  par(mfrow = c(ceiling(param_dim/2)), 2)
+  par(mfrow = c(ceiling(param_dim/2), 2))
   for (p in 1:param_dim) {
-    plot(hmc.fit[,,p], type = "l", main = param_names[p])
+    plot(hmc.samples[,p], type = "l", main = param_names[p])
     abline(h = true_vals[p], lty = 2, col = "red")
   }
   
 }
+
+
+# gc()
+# tf$keras$backend$clear_session()

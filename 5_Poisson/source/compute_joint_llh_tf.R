@@ -114,6 +114,7 @@ compute_joint_llh_tf <- tf_function(
         llh_alpha_i_tf <- norm$log_prob(alpha_i)
         
         log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
+        
       })
       
       grad_tf %<-% tape1$jacobian(log_likelihood_tf, theta)
@@ -143,7 +144,6 @@ fill_lower_tri <- function(dim, vals) {
   d <- as.integer(dim)
   S <- 1L#as.integer(nrow(vals))
   # vals_tf <- tf$constant(vals, dtype = "float64")
-  
   diag_mat <- tf$linalg$diag(tf$exp(vals[1:d]))
   # diag_mat_tiled <- tf$tile(diag_mat, c(S, 1L, 1L))
   
