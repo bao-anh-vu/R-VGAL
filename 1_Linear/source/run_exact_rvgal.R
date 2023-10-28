@@ -135,12 +135,24 @@ run_exact_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L,
   
   # ## Plot posterior
   post_var <- solve(prec[[N+1]])
-  rvga.post_samples <- rmvnorm(10000, mu_vals[[N+1]], post_var) # these are samples of beta, log(sigma_a^2), log(sigma_e^2)
+  rvgal.post_samples <- rmvnorm(n_post_samples, mu_vals[[N+1]], post_var) # these are samples of beta, log(sigma_a^2), log(sigma_e^2)
+  
+  for (p in 1:param_dim) {
+    if (p == param_dim || p == (param_dim - 1)) {
+      rvgal.post_samples[, p] <- sqrt(exp(rvgal.post_samples[, p]))
+    } else {
+      rvgal.post_samples[, p] <- rvgal.post_samples[, p]
+    }
+  }
+  
+  rvgal.post_samples <- as.data.frame(rvgal.post_samples)
+  param_names <- c("beta_1", "beta_2", "beta_3", "beta_4", "sigma_a", "sigma_e")
+  names(rvgal.post_samples) <- param_names
   
   ## Save results
   rvga_results <- list(mu = mu_vals,
                        prec = prec,
-                       post_samples = rvga.post_samples,
+                       post_samples = rvgal.post_samples,
                        S = S,
                        # S_alpha = S_alpha, 
                        N = N, 

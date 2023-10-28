@@ -1,4 +1,6 @@
-## Structure:
+setwd("~/R-VGAL/2_Logistic/")
+
+# Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
 # 3. Run HMC
@@ -14,6 +16,7 @@ library("rstan")
 library("gridExtra")
 library("grid")
 library("gtable")
+library(coda)
 
 source("./source/run_rvgal.R")
 source("./source/run_stan_logmm.R")
@@ -22,8 +25,8 @@ source("./source/generate_data.R")
 ## Flags
 date <- "20230329"  
 regenerate_data <- F
-rerun_rvga <- T
-rerun_stan <- T
+rerun_rvga <- F
+rerun_stan <- F
 save_data <- F
 save_rvga_results <- F
 save_hmc_results <- F
@@ -36,7 +39,7 @@ if (use_tempering) {
   a_vals_temper <- rep(1/4, 4)
 }
 
-n_post_samples <- 10000
+n_post_samples <- 20000
 
 ## Generate data
 N <- 500L #number of individuals
@@ -103,6 +106,7 @@ P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 
 if (rerun_rvga) {
   rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,
+                            n_post_samples = n_post_samples,
                             use_tempering = use_tempering, 
                             n_temper = n_obs_to_temper, 
                             temper_schedule = a_vals_temper)
@@ -118,7 +122,9 @@ if (rerun_rvga) {
 ########################
 ##        STAN        ##
 ########################
-hmc.iters <- 15000
+burn_in <- 5000
+n_chains <- 2
+hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
   
@@ -126,24 +132,26 @@ if (rerun_stan) {
   y_long <- unlist(y) #as.vector(t(y))
   X_long <- do.call("rbind", X)
   
-  hfit <- run_stan_logmm(iters = hmc.iters, burn_in = hmc.iters - n_post_samples, 
-                         data = y_long, 
+  hmc_results <- run_stan_logmm(iters = hmc.iters, burn_in = burn_in, 
+                         n_chains = n_chains, data = y_long, 
                          grouping = rep(1:N, each = n), n_groups = N,
-                         fixed_covariates = X_long,
-                         save_results = save_hmc_results)
+                         fixed_covariates = X_long)
   
   if (save_hmc_results) {
-    saveRDS(hfit, file = paste0(result_directory, "logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0(result_directory, "logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
   }
   
 } else {
-  hfit <- readRDS(file = paste0(result_directory, "logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
+  hmc_results <- readRDS(file = paste0(result_directory, "logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
   
 }
 
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "omega"),
-                   permuted = F)
+# hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "omega"),
+#                    permuted = F, inc_warmup = F)
 
+hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
+hmc.n_eff <- hmc_results$n_eff
+hmc.Rhat <- hmc_results$Rhat
 ######################## Results #########################
 
 rvgal.post_samples <- matrix(NA, nrow = n_post_samples, ncol = param_dim)
@@ -288,3 +296,8 @@ if (save_plots) {
   grid.draw(gp)
   dev.off()
 } 
+
+## Time benchmark
+hmc.time <- sum(colSums(hmc_results$time)) # sum over all chains
+rvga.time <- rvga_results$time_elapsed
+cat("HMC time:", hmc.time, ", R-VGAL time:", rvga.time[3], "\n")

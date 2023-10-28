@@ -1,3 +1,4 @@
+setwd("~/R-VGAL/4_Polypharmacy/")
 ## Logistic mixed model with POLYPHARMACY data ##
 
 # reticulate::use_condaenv("tf2.11", required = TRUE)
@@ -12,11 +13,32 @@ library("grid")
 library("gtable")
 
 source("./source/run_rvgal.R")
+source("./source/run_stan_logmm.R")
 
-rerun_rvga <- T
+# List physical devices
+gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+if (length(gpus) > 0) {
+  tryCatch({
+    # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
+    tf$config$experimental$set_virtual_device_configuration(
+      gpus[[1]],
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=2^14))
+    )
+    
+    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+    
+    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+  }, error = function(e) {
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
+  })
+}
+
+rerun_rvga <- F
 save_rvga_results <- F
 rerun_stan <- T
-save_hmc_results <- F
+save_hmc_results <- T
 date <- "20230327_1" 
 use_tempering <- T
 reorder_data <- F
@@ -31,7 +53,7 @@ if (use_tempering) {
   a_vals_temper <- rep(1/4, 4)
 }
 
-n_post_samples <- 10000 # desired number of posterior samples
+n_post_samples <- 20000 # desired number of posterior samples
 S <- 200L ## number of Monte Carlo samples for approximating the expectations in R-VGAL
 S_alpha <- 200L ## number of MC samples for approximating Fisher's/Louis' identities in R-VGA
 
@@ -123,7 +145,9 @@ if (rerun_rvga) {
     X <- reordered_X
   }
   
-  rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,
+  rvga_results <- run_rvgal(y, X, mu_0, P_0, 
+                            n_post_samples = n_post_samples,
+                            S = S, S_alpha = S_alpha,
                             use_tempering = use_tempering, 
                             n_temper = n_obs_to_temper, 
                             temper_schedule = a_vals_temper,
@@ -143,59 +167,39 @@ rvga.post_samples <- rvga_results$post_samples
 ##      STAN      ##
 ####################
 burn_in <- 5000
-hmc.iters <- burn_in + n_post_samples
+n_chains <- 2
+hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
   hmc.t1 <- proc.time()
   
   ## Data manipulation ##
-  y <- data$POLYPHARMACY
-  X <- cbind(intercept, data[, fixed_effects])
+  y_long <- data$POLYPHARMACY
+  X_long <- cbind(intercept, data[, fixed_effects])
   
-  logistic_code <- '
-  data {
-      int N; // number of obs (pregnancies)
-      int M; // number of groups (women)
-      int K; // number of predictors
-      
-      int y[N]; // outcome
-      row_vector[K] x[N]; // predictors
-      int g[N];    // map obs to groups (this is e.g. 11111 22222 33333 etc)
-  }
-  parameters {
-      real a[M]; 
-      vector[K] beta;
-      real<lower=0> omega;  
-  }
-  model {
-    omega ~ normal(1, 1);
-    a ~ normal(0, sqrt(exp(omega)));
-    beta ~ normal(0, sqrt(10));
-    for(n in 1:N) {
-      y[n] ~ bernoulli(inv_logit(a[g[n]] + x[n]*beta));
-    }
-  }
-  '
-  logistic_data <- list(N = N * n, M = N, K = length(fixed_effects)+1, y = y, 
-                        x = X, g = rep(1:N, each = n))
+  logistic_code <- "./source/logistic_mm.stan"
   
-  hfit <- stan(model_code = logistic_code, 
-               model_name="logistic_mm", data = logistic_data, 
-               iter = hmc.iters, warmup = burn_in, chains=1)
+  # logistic_data <- list(N = N * n, M = N, K = length(fixed_effects)+1, y = y, 
+  #                       x = X, g = rep(1:N, each = n))
+  
+  hmc_results <- run_stan_logmm(iters = hmc.iters, burn_in = burn_in, 
+                                n_chains = n_chains, data = y_long, 
+                                grouping = rep(1:N, each = n), n_groups = N,
+                                fixed_covariates = X_long)
   
   hmc.t2 <- proc.time()
   
   if (save_hmc_results) {
-    saveRDS(hfit, file = paste0(result_directory, "polypharmacy_mm_hmc_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0(result_directory, "polypharmacy_mm_hmc_", date, ".rds"))
   }
   
 } else {
-  hfit <- readRDS(file = paste0(result_directory, "polypharmacy_mm_hmc_", date, ".rds")) # for the experiements on starting points
+  hmc_results <- readRDS(file = paste0(result_directory, "polypharmacy_mm_hmc_", date, ".rds")) # for the experiements on starting points
 }
 
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]",
-                                  "beta[5]","beta[6]","beta[7]","beta[8]", "omega"),
-                   permuted = F)
+hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
+hmc.n_eff <- hmc_results$n_eff
+hmc.Rhat <- hmc_results$Rhat
 
 # traceplot(hfit, c("beta[1]","beta[2]","beta[3]","beta[4]",
 #                   "beta[5]","beta[6]","beta[7]","beta[8]", "omega"),
@@ -346,3 +350,9 @@ if (save_plots) {
   grid.draw(gp)
   dev.off()
 } 
+
+## Time benchmark
+hmc.time <- sum(colSums(get_elapsed_time(hfit)))
+rvga.time <- rvga_results$time_elapsed
+print(hmc.time)
+print(rvga.time)

@@ -1,3 +1,5 @@
+setwd("~/R-VGAL/1_Linear/")
+
 ## Structure of the code:
 ## 1. Regenerate data
 ## 2. Run R-VGAL with estimated gradients/Hessians
@@ -6,8 +8,30 @@
 
 rm(list = ls())
 
-# reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
+
+# List physical devices
+gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+if (length(gpus) > 0) {
+  tryCatch({
+    # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
+    tf$config$experimental$set_virtual_device_configuration(
+      gpus[[1]],
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
+    )
+    
+    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+    
+    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+  }, error = function(e) {
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
+  })
+}
+
+
+
 library("mvtnorm")
 library("Matrix")
 library("rstan")
@@ -24,9 +48,9 @@ source("./source/run_stan_lmm.R")
 
 date <- "20230329"
 regenerate_data <- F
-rerun_est_rvgal <- T
-rerun_exact_rvgal <- T
-rerun_hmc <- T
+rerun_est_rvgal <- F
+rerun_exact_rvgal <- F
+rerun_hmc <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -45,7 +69,7 @@ N <- 200L
 n <- 10L
 S <- 100L
 S_alpha <- 100L
-n_post_samples <- 10000
+n_post_samples <- 20000
 
 ## 1. Generate data
 if (regenerate_data) {
@@ -54,7 +78,7 @@ if (regenerate_data) {
   sigma_e <- 0.7
   beta <- c(-1.5, 1.5, 0.5, 0.25) 
   
-  linear_data <- generate_data(beta, sigma_a, sigma_e, save_data = save_data, date)
+  linear_data <- generate_data(beta, sigma_a, sigma_e)
   
   if (save_data) {
     saveRDS(linear_data, file = paste0("./data/linear_data_N", N, "_n", n, "_", date, ".rds"))
@@ -96,12 +120,14 @@ var_psi_0 <- 1
 P_0 <- diag(c(var_beta_0, var_phi_0, var_psi_0), param_dim)
 
 ## Sample to see if prior mean and variance are reasonable
-# samples <- rmvnorm(10000, mu_0, P_0)
-# sigma_a_samples <- sqrt(exp(samples[, 5]))
-# sigma_e_samples <- sqrt(exp(samples[, 6]))
-# par(mfrow = c(1, 2))
-# plot(density(sigma_a_samples), main = "Prior density of sigma_a")
-# plot(density(sigma_e_samples), main = "Prior density of sigma_e")
+samples <- rmvnorm(10000, mu_0, P_0)
+sigma_a_samples <- sqrt(exp(samples[, 5]))
+sigma_e_samples <- sqrt(exp(samples[, 6]))
+par(mfrow = c(1, 2))
+plot(density(sigma_a_samples), main = "Prior density of sigma_a")
+plot(density(sigma_e_samples), main = "Prior density of sigma_e")
+
+# browser()
 
 ## 2. Run R-VGAL with estimated gradients/Hessians
 
@@ -158,11 +184,17 @@ if (rerun_exact_rvgal) {
 }
 
 ## 4. Run HMC 
-hmc_iters <- 15000
+burn_in <- 5000
+n_chains <- 2
+hmc.iters <- n_post_samples/n_chains + burn_in
+
 if (rerun_hmc) {
   hfit <- run_stan_lmm(data = y, fixed_covariates = X, 
                        random_covariates = Z,
-                       iters = hmc_iters, burn_in = hmc_iters - n_post_samples)
+                       prior_mean = mu_0, 
+                       prior_var = P_0,
+                       iters = hmc.iters, burn_in = burn_in,
+                       nchains = n_chains)
   
   if (save_hmc_results) {
     saveRDS(hfit, file = paste0(result_directory, "linear_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
@@ -171,9 +203,10 @@ if (rerun_hmc) {
 } else {
   hfit <- readRDS(file = paste0(result_directory, "linear_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
 }
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "phi", "psi"), 
-                   permuted = F)
-
+hmc.fit <- hfit$post_samples[-(1:burn_in), , ] #extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "phi", "psi"), 
+                   # permuted = F)
+hmc.n_eff <- hfit$n_eff
+hmc.Rhat <- hfit$Rhat
 ######################################
 ##              Results             ##
 ######################################
@@ -185,13 +218,22 @@ hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
   
-  if (p == (param_dim - 1) || p == param_dim) { # if the parameters are variance parameters
-    est_rvgal.post_samples[, p] <- sqrt(exp(est_rvgal_results$post_samples[, p])) # then back-transform
-    exact_rvgal.post_samples[, p] <- sqrt(exp(exact_rvgal_results$post_samples[, p]))
-    hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
+  ## Extract R-VGAL samples
+  # if (p == (param_dim - 1) || p == param_dim) { # if the parameters are variance parameters
+  #   est_rvgal.post_samples[, p] <- sqrt(exp(est_rvgal_results$post_samples[, p])) # then back-transform
+  #   exact_rvgal.post_samples[, p] <- sqrt(exp(exact_rvgal_results$post_samples[, p]))
+  #   # hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
+  # } else {
+  #   
+  # }
+  
+  est_rvgal.post_samples[, p] <- est_rvgal_results$post_samples[, p]
+  exact_rvgal.post_samples[, p] <- exact_rvgal_results$post_samples[, p]
+  
+  ## Extract HMC samples
+  if (length(dim(hmc.fit)) < 3) {
+    hmc.samples[, p] <- hmc.fit[, p]
   } else {
-    est_rvgal.post_samples[, p] <- est_rvgal_results$post_samples[, p]
-    exact_rvgal.post_samples[, p] <- exact_rvgal_results$post_samples[, p]
     hmc.samples[, p] <- hmc.fit[, , p]
   }
 }
@@ -205,7 +247,6 @@ for (p in 1:param_dim) {
 # }
 
 ## Posterior density plots (ggplot version) 
-
 param_names <- c("beta1", "beta2", "beta3", "beta4", "sigma_a", "sigma_e")
 est_rvgal.df <- data.frame(est_rvgal.post_samples)
 exact_rvgal.df <- data.frame(exact_rvgal.post_samples)
@@ -220,7 +261,9 @@ param_values <- c(beta, sigma_a, sigma_e)
 
 plots <- list()
 
-for (p in 1:(param_dim-2)) {
+################## Dev ###############
+
+for (p in 1:param_dim) {
   
   true_vals.df <- data.frame(name = param_names[p], val = param_values[p])
   
@@ -241,32 +284,55 @@ for (p in 1:(param_dim-2)) {
   plots[[p]] <- plot  
 }
 
-sigma_a_plot <- ggplot(exact_rvgal.df, aes(x=sigma_a)) + 
-  geom_density(col = "goldenrod", lwd = 1) +
-  geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
-  geom_density(data = hmc.df, col = "blue", lwd = 1) +
-  geom_vline(data = true_vals.df, aes(xintercept=sigma_a),
-             color="black", linetype="dashed", linewidth=1) +
-  labs(x = expression(sigma[alpha])) +
-  theme_bw() +
-  theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
-  scale_x_continuous(breaks = scales::pretty_breaks(n = 4))
-# theme(legend.position="bottom") +
-# scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
+############## End dev ###############
 
-sigma_e_plot <- ggplot(exact_rvgal.df, aes(x=sigma_e)) + 
-  geom_density(col = "goldenrod", lwd = 1) +
-  geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
-  geom_density(data = hmc.df, col = "blue", lwd = 1) +
-  geom_vline(data = true_vals.df, aes(xintercept=sigma_e),
-             color="black", linetype="dashed", linewidth=1) + 
-  labs(x = expression(sigma[epsilon])) +
-  theme_bw() +
-  theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
-  scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
-
-plots[[param_dim-1]] <- sigma_a_plot
-plots[[param_dim]] <- sigma_e_plot
+# for (p in 1:(param_dim-2)) {
+#   
+#   true_vals.df <- data.frame(name = param_names[p], val = param_values[p])
+#   
+#   plot <- ggplot(exact_rvgal.df, aes(x=.data[[param_names[p]]])) +
+#     # plot <- ggplot(exact_rvgal.df, aes(x=colnames(exact_rvgal.df)[p])) + 
+#     geom_density(col = "goldenrod", lwd = 1) +
+#     geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
+#     geom_density(data = hmc.df, col = "blue", lwd = 1) +
+#     geom_vline(data = true_vals.df, aes(xintercept=val),
+#                color="black", linetype="dashed", linewidth=1) +
+#     labs(x = bquote(beta[.(p)])) +
+#     theme_bw() +
+#     theme(axis.title = element_blank(), text = element_text(size = 18)) +
+#     scale_x_continuous(breaks = scales::pretty_breaks(n = 4))
+#   # theme(legend.position="bottom") + 
+#   # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
+#   
+#   plots[[p]] <- plot  
+# }
+# 
+# sigma_a_plot <- ggplot(exact_rvgal.df, aes(x=sigma_a)) + 
+#   geom_density(col = "goldenrod", lwd = 1) +
+#   geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
+#   geom_density(data = hmc.df, col = "blue", lwd = 1) +
+#   geom_vline(data = true_vals.df, aes(xintercept=sigma_a),
+#              color="black", linetype="dashed", linewidth=1) +
+#   labs(x = expression(sigma[alpha])) +
+#   theme_bw() +
+#   theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
+#   scale_x_continuous(breaks = scales::pretty_breaks(n = 4))
+# # theme(legend.position="bottom") +
+# # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
+# 
+# sigma_e_plot <- ggplot(exact_rvgal.df, aes(x=sigma_e)) + 
+#   geom_density(col = "goldenrod", lwd = 1) +
+#   geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
+#   geom_density(data = hmc.df, col = "blue", lwd = 1) +
+#   geom_vline(data = true_vals.df, aes(xintercept=sigma_e),
+#              color="black", linetype="dashed", linewidth=1) + 
+#   labs(x = expression(sigma[epsilon])) +
+#   theme_bw() +
+#   theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
+#   scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
+# 
+# plots[[param_dim-1]] <- sigma_a_plot
+# plots[[param_dim]] <- sigma_e_plot
 
 ## Arrange bivariate plots in lower off-diagonals
 n_lower_tri <- (param_dim^2 - param_dim)/2 # number of lower triangular elements
@@ -339,3 +405,15 @@ if (save_plots) {
   grid.draw(gp)
   dev.off()
 } 
+
+###
+# par(mfrow = c(1,1))
+# plot(density(sigma_a_samples), main = "Prior density of sigma_a")
+# lines(density(est_rvgal.df$sigma_a), col = "red")
+# legend("topright", legend = c("Prior", "Posterior"), col = c("black", "red"), lty = 1)
+
+## Time benchmark
+hmc.time <- sum(colSums(hfit$time))
+rvga.time <- est_rvgal_results$time_elapsed
+print(hmc.time)
+print(rvga.time)

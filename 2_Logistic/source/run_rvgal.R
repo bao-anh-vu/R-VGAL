@@ -1,8 +1,8 @@
 run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
                       use_tempering = T, n_temper = 10, 
                       temper_schedule = rep(0.25, 4),
-                      n_post_samples = 10000,
-                      save_results = F) {
+                      n_post_samples = 10000
+                      ) {
 
   tf64 <- function(x) tf$constant(x, dtype = "float64")
     

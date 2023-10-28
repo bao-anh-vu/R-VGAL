@@ -1,4 +1,5 @@
-run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
+run_rvgal <- function(y, X, mu_0, P_0, 
+                      S = 100L, S_alpha = 100L,
                       use_tempering = T, n_temper = 10, 
                       temper_schedule = rep(0.25, 4),
                       n_post_samples = 10000,

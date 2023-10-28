@@ -1,3 +1,5 @@
+setwd("~/R-VGAL/3_Sixcity")
+
 ## R-VGAL with six city data ##
 
 # reticulate::use_condaenv("tf2.11", required = TRUE)
@@ -11,10 +13,11 @@ library("grid")
 library("gtable")
 
 source("./source/run_rvgal.R")
+source("./source/run_stan_logmm.R")
 
-rerun_rvga <- T
+rerun_rvga <- F
 save_rvga_results <- F
-rerun_stan <- T
+rerun_stan <- F
 save_hmc_results <- F
 date <- "20230327" 
 reorder_data <- T
@@ -30,6 +33,7 @@ if (use_tempering) {
   a_vals_temper <- rep(1/4, 4)
 }
 
+n_post_samples <- 20000
 S <- 200L
 S_alpha <- 200L
 
@@ -107,7 +111,9 @@ if (rerun_rvga) {
     X <- X
   }
   
-  rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,
+  rvga_results <- run_rvgal(y, X, mu_0, P_0, 
+                            n_post_samples = n_post_samples,
+                            S = S, S_alpha = S_alpha,
                             use_tempering = use_tempering, 
                             n_temper = n_obs_to_temper, 
                             temper_schedule = a_vals_temper)
@@ -126,61 +132,47 @@ mu_vals <- rvga_results$mu
 ##########
 ## STAN ##
 ##########
-hmc.iters <- 15000
-burn_in <- 5000
+burn_in <- 1000
+n_chains <- 2
+hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
   hmc.t1 <- proc.time()
   
   ## Data manipulation ##
-  y <- unlist(y)
-  X <- cbind(intercept, data[, fixed_effects])
+  y_long <- unlist(y)
+  X_long <- cbind(intercept, data[, fixed_effects])
   
-  logistic_code <- '
-  data {
-      int N; // number of obs (total)
-      int M; // number of groups (children)
-      int K; // number of covariates
-      
-      int y[N]; // outcome
-      row_vector[K] x[N]; // covariates
-      int g[N];    // map obs to groups (this is e.g. 1111 2222 3333 etc in my model)
-  }
-  parameters {
-      real a[M]; 
-      vector[K] beta;
-      real<lower=0> omega;  
-  }
-  model {
-    omega ~ normal(1, 1);
-    a ~ normal(0, sqrt(exp(omega)));
-    beta ~ normal(0, sqrt(10));
-    for(n in 1:N) {
-      y[n] ~ bernoulli(inv_logit(a[g[n]] + x[n]*beta));
-    }
-  }
-  '
-  logistic_data <- list(N = N * n, M = N, K = length(fixed_effects)+1, y = y, 
-                        x = X, g = rep(1:N, each = n))
+  logistic_code <- "./source/logistic_mm.stan"
   
-  hfit <- stan(model_code = logistic_code, 
-               model_name="logistic_mm", data = logistic_data, 
-               iter = hmc.iters, warmup = burn_in, chains=1)
+  # logistic_data <- list(N = N * n, M = N, K = length(fixed_effects)+1, y = y, 
+  #                       x = X, g = rep(1:N, each = n))
+  
+  # hfit <- stan(file = logistic_code, 
+  #              model_name="logistic_mm", data = logistic_data, 
+  #              iter = hmc.iters, warmup = burn_in, chains=n_chains)
+  
+  hmc_results <- run_stan_logmm(iters = hmc.iters, burn_in = burn_in, 
+                         n_chains = n_chains, data = y_long, 
+                         grouping = rep(1:N, each = n), n_groups = N,
+                         fixed_covariates = X_long)
   
   hmc.t2 <- proc.time()
   
   if (save_hmc_results) {
-    saveRDS(hfit, file = paste0(result_directory, "sixcity_mm_hmc_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0(result_directory, "sixcity_mm_hmc_", date, ".rds"))
   }
   
 } else {
-  hfit <- readRDS(file = paste0(result_directory, "sixcity_mm_hmc_", date, ".rds")) # for the experiements on starting points
+  hmc_results <- readRDS(file = paste0(result_directory, "sixcity_mm_hmc_", date, ".rds")) # for the experiements on starting points
 }
 
 ## Extract samples from STAN
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]", "omega"),
-                   permuted = F)
-hmc.samples <- matrix(NA, hmc.iters - burn_in, param_dim)
+hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
+hmc.n_eff <- hmc_results$n_eff
+hmc.Rhat <- hmc_results$Rhat
+
+hmc.samples <- matrix(NA, n_post_samples, param_dim)
 for (p in 1:(param_dim-1)) {
   hmc.samples[, p] <- hmc.fit[, , p]
 }

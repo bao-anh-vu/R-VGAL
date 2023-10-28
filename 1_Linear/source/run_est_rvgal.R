@@ -218,7 +218,19 @@ run_est_rvgal <- function(y, X, Z, mu_0, P_0, S = 1000L, S_alpha = 1000L,
   
   ## Posterior samples
   rvgal.post_var <- solve(prec[[N+1]])
-  rvgal.post_samples <- rmvnorm(10000, mu_vals[[N+1]], rvgal.post_var) # these are samples of beta, log(sigma_a^2), log(sigma_e^2)
+  rvgal.post_samples <- rmvnorm(n_post_samples, mu_vals[[N+1]], rvgal.post_var) # these are samples of beta, log(sigma_a^2), log(sigma_e^2)
+  
+  for (p in 1:param_dim) {
+    if (p == param_dim || p == (param_dim - 1)) {
+      rvgal.post_samples[, p] <- sqrt(exp(rvgal.post_samples[, p]))
+    } else {
+      rvgal.post_samples[, p] <- rvgal.post_samples[, p]
+    }
+  }
+  
+  rvgal.post_samples <- as.data.frame(rvgal.post_samples)
+  param_names <- c("beta_1", "beta_2", "beta_3", "beta_4", "sigma_a", "sigma_e")
+  names(rvgal.post_samples) <- param_names
   
   ## Save results
   rvgal_results <- list(mu = mu_vals,

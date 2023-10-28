@@ -1,4 +1,4 @@
-generate_data <- function(beta, sigma_a, sigma_e, save_data = T, date) {
+generate_data <- function(beta, sigma_a, sigma_e) {
   ## True parameters
   # sigma_a <- 0.9
   # sigma_e <- 0.7
@@ -21,9 +21,9 @@ generate_data <- function(beta, sigma_a, sigma_e, save_data = T, date) {
   linear_data <- list(y = y, X = X, Z = Z, beta = beta, 
                       sigma_a = sigma_a, sigma_e = sigma_e, N = N, n = n)
   
-  if (save_data) {
-    saveRDS(linear_data, file = paste0("linear_data_N", N, "_n", n, "_", date, ".rds"))
-  }
+  # if (save_data) {
+  #   saveRDS(linear_data, file = paste0("linear_data_N", N, "_n", n, "_", date, ".rds"))
+  # }
   
   return(linear_data)
 }
