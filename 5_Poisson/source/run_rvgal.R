@@ -13,16 +13,16 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   print("Starting R-VGA...")
   t1 <- proc.time()
   
-  # n_fixed_effects <- as.integer(ncol(X[[1]]))
-  # n_random_effects <- as.integer(ncol(Z[[1]]))
+  n_fixed_effects <- as.integer(ncol(X[[1]]))
+  n_random_effects <- as.integer(ncol(Z[[1]]))
   
   param_dim <- as.integer(length(mu_0))
   N <- length(y)
   n <- length(y[[1]])
   ## Sample from the "prior"
   ## par(mfrow = c(1, 1))
-  ## test_omega <- rnorm(10000, mu_0[param_dim], P_0[param_dim, param_dim])
-  ## plot(density(sqrt(exp(test_omega))), main = "RVGA: Prior of tau")
+  ## test_zeta <- rnorm(10000, mu_0[param_dim], P_0[param_dim, param_dim])
+  ## plot(density(sqrt(exp(test_zeta))), main = "RVGA: Prior of tau")
   
   mu_vals <- lapply(1:N, function(x) mu_0)
   prec <- lapply(1:N, function(x) solve(P_0))
@@ -58,9 +58,6 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       grads <- list()
       hessians <- list()
       
-      n_fixed_effects <- ncol(X[[i]])
-      n_random_effects <- ncol(Z[[i]])
-      
       y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
       X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
       Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
@@ -71,66 +68,117 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
 
       Sigma_alpha_all <- lapply(samples_list, construct_Sigma,
                                 d = n_random_effects)
-      alpha_all <- lapply(Sigma_alpha_all,
-                          function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
+      
+      if (n_random_effects == 1) {
+        alpha_all <- lapply(Sigma_alpha_all,
+                            function(Sigma) rnorm(S_alpha, 0, sqrt(Sigma)))
+      } else {
+        alpha_all <- lapply(Sigma_alpha_all,
+                            function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
+      } 
 
-      prior_var_beta <- diag(P_0)[1:n_fixed_effects]
-      
-      I_d <- diag(n_random_effects)
-        
-      log_likelihood <- list()
-      for (l in 1:S) {
-        theta_l <- samples[l, ]
-        
-        beta_l <- theta_l[1:n_fixed_effects]
-        
-        Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
-                                         d = n_random_effects)
-        alpha_l <- alpha_all[[l]]
-        
-        grad_beta <- list()
-        grad_zeta <- list()
-        
-        W <- t(chol(Sigma_alpha_l))
-        W_inv <- solve(W)
-        
-        for (s in 1:S_alpha) {
-          alpha_l_s <- alpha_l[s, ]
-          
-          grad_beta[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
-          
-          I_zeta <- diag(alpha_l_s)
-          I_zeta[lower.tri(I_zeta)] <- 1
-          A <- t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
-          grad_zeta[[s]] <- I_d[lower.tri(I_d, diag = T)] + 
-            I_zeta[lower.tri(I_zeta, diag = T)] * A[lower.tri(A, diag = T)]
-        }
-        
-        ## likelihood seems ok -- same between TF and for loop
-        # test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
-        #                                  alpha_all[[l]], theta_l, S_alpha)
-        # log_likelihood[[l]] <- test$llh
-        # llh_y <- test$llh_y
-      }
-      
+      ############# Theoretical gradient ############
+      # prior_var_beta <- diag(P_0)[1:n_fixed_effects]
+      # 
+      # I_d <- diag(n_random_effects)
+      # 
+      # log_likelihood <- list()
+      # llh_test <- list()
+      # grad_beta <- list()
+      # grad_zeta <- list()
+      # grad_joint <- list()
+      # hess_joint <- list()
+      # 
+      # for (l in 1:S) {
+      #   theta_l <- samples[l, ]
+      # 
+      #   beta_l <- theta_l[1:n_fixed_effects]
+      # 
+      #   Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
+      #                                    d = n_random_effects)
+      #   alpha_l <- alpha_all[[l]]
+      # 
+      #   llh_tan <- list() # log likelihood from Tan and Nott
+      #   grad_beta_l <- list()
+      #   grad_zeta_l <- list()
+      #   grad_joint_l <- list()
+      #   hess_beta_l <- list()
+      #   hess_zeta_l <- list()
+      #   hess_joint_l <- list()
+      # 
+      #   W <- t(chol(Sigma_alpha_l))
+      #   W_inv <- solve(W)
+      # 
+      #   for (s in 1:S_alpha) {
+      # 
+      #     if (n_random_effects == 1) {
+      #       alpha_l_s <- alpha_l[s]
+      #     } else {
+      #       alpha_l_s <- alpha_l[s, ]
+      #     }
+      # 
+      #     ## Log likelihood from Tan and Nott -- to compare with TF llh
+      #     llh_y_tan <- y[[i]] %*% (X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s) -
+      #       sum(exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) - sum(log(factorial(y[[i]])))
+      #     llh_alpha_tan <- - 1/2 * n_random_effects * log(2*pi) - sum(log(diag(W))) - 1/2 * t(alpha_l_s) %*% t(W_inv) %*% W_inv %*% alpha_l_s
+      #     llh_tan[[s]] <- llh_y_tan + llh_alpha_tan
+      # 
+      #     ## Gradients of p(y_i, alpha_i^(s) | beta, zeta^(s)) from Tan and Nott
+      #     grad_beta_l[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
+      # 
+      #     ##
+      #     I_zeta <- W #diag(alpha_l_s)
+      #     I_zeta[lower.tri(I_zeta)] <- 1
+      # 
+      #     A <- t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
+      # 
+      #     grad_zeta_l[[s]] <- - I_d[lower.tri(I_d, diag = T)] +
+      #       I_zeta[lower.tri(I_zeta, diag = T)] * A[lower.tri(A, diag = T)]
+      # 
+      #     grad_joint_l[[s]] <- c(grad_beta_l[[s]], grad_zeta_l[[s]])
+      # 
+      #     ## Now Hessian
+      #     grad2_beta <- list()
+      #     for (j in 1:n) { # vectorise later
+      #       grad2_beta[[j]] <- as.numeric(- exp(X[[i]][j, ] %*% beta_l + Z[[i]][j, ] %*% alpha_l_s)) * tcrossprod(X[[i]][j, ])
+      #     }
+      #     hess_beta_l[[s]] <- Reduce("+", grad2_beta)
+      #     hess_joint_l[[s]] <- hess_beta_l[[s]]
+      #     ## Hessian of zeta
+      #     # how do I even begin...
+      #   }
+      # 
+      #   ## likelihood seems ok -- same between TF and for loop
+      #   log_likelihood[[l]] <- unlist(llh_tan)
+      #   grad_beta[[l]] <- grad_beta_l
+      #   grad_zeta[[l]] <- grad_zeta_l
+      # 
+      #   grad_joint[[l]] <- grad_joint_l
+      #   hess_joint[[l]] <- hess_joint_l
+      #   # test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
+      #   #                                  alpha_l, theta_l, S_alpha)
+      #   # llh_test[[l]] <- test$llh
+      #   # llh_test_y <- test$llh_y
+      #   # llh_test_alpha <- test$llh_alpha
+      # }
       ############ TF #############
       
       alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
       theta_tf <- tf$Variable(samples, dtype = "float64")
 
-      ##  
-      tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf,
-                                      alpha_all_tf, theta_tf)
-      tf_grad <- tf_out$grad
-      tf_grad_1 <- tf_grad[1,,]
-      tf_grad_beta <- tf_grad_1[, 1:n_fixed_effects]
-      tf_grad_zeta <- tf_grad_1[, (n_fixed_effects+1):param_dim]
-      
-      browser()
-      ##
+      # # #
+      # tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf,
+      #                                 alpha_all_tf, theta_tf, S_alpha)
+      # tf_grad <- tf_out$grad
+      # 
+      # tf_grad_beta <- tf_grad[,, 1:n_fixed_effects]
+      # tf_grad_zeta <- tf_grad[,, (n_fixed_effects+1):param_dim]
+      # 
+      # browser()
+      # # ##
       
       tf_out2 <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
-                                     alpha_all_tf, theta_tf)
+                                     alpha_all_tf, theta_tf, S_alpha)
       
       E_score_tf <- tf$math$reduce_mean(tf_out2$grad, 0L)
       E_hessian_tf <- tf$math$reduce_mean(tf_out2$hessian, 0L)
@@ -249,7 +297,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   }
   
   t2 <- proc.time()
-  print(t2 - t1)
+  # print(t2 - t1)
   
   post_var <- chol2inv(chol(prec[[N+1]]))
   rvgal.post_samples <- rmvnorm(n_post_samples, mu_vals[[N+1]], post_var)  
@@ -291,18 +339,25 @@ index_to_i_j_rowwise_diag <- function(k) {
 }
 
 construct_Sigma <- function(theta, d, use_chol = T) { #d is the dimension of Sigma_eta
-  nlower <- d*(d-1)/2
-  L <- diag(exp(theta[1:d]))
-  offdiags <- theta[-(1:d)] # off diagonal elements are those after the first 2*d elements
-  if (use_chol) {
-    for (k in 1:nlower) {
-      ind <- index_to_i_j_rowwise_nodiag(k)
-      L[ind[1], ind[2]] <- offdiags[k]
-    }
-    Sigma <- L %*% t(L)
+  
+  if (d == 1) {
+    Sigma <- exp(theta[1])^2
   } else {
-    Sigma <- L
+    nlower <- d*(d-1)/2
+    L <- diag(exp(theta[1:d]))
+    offdiags <- theta[-(1:d)] # off diagonal elements are those after the first 2*d elements
+    if (use_chol) {
+      for (k in 1:nlower) {
+        ind <- index_to_i_j_rowwise_nodiag(k)
+        L[ind[1], ind[2]] <- offdiags[k]
+      }
+      Sigma <- L %*% t(L)
+    } else {
+      Sigma <- L
+    }
+    
   }
+  
   return(Sigma)
 }
 
@@ -349,6 +404,8 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   
   llh <- c()  
   llh_y <- c()
+  llh_alpha <- c()
+  
   for (s in 1:S_alpha) {
     alpha_i_s <- alpha_i[s, ]
     
@@ -366,6 +423,8 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
     llh_alpha_i_s <- dmvnorm(t(alpha_i_s), rep(0, length(alpha_i_s)), Sigma_alpha, log = T)
     # llh_alpha_i_s2 <- -1/2 * log(det(Sigma_alpha)) - n_random_effects/2 * log(2*pi) - 
     #   1/2 * t(alpha_i_s) %*% solve(Sigma_alpha) %*% alpha_i_s
+    llh_alpha[s] <- llh_alpha_i_s
+    
     llh[s] <- llh_y_i_s + llh_alpha_i_s
     # llh[s] <- llh_alpha_i_s
     
@@ -373,5 +432,6 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   }
   # llh <- sum(llh)
   
-  return(list(llh = llh, llh_y = llh_y, beta = beta, Sigma_alpha = Sigma_alpha))
+  return(list(llh = llh, llh_y = llh_y, llh_alpha = llh_alpha,
+              beta = beta, Sigma_alpha = Sigma_alpha))
 }

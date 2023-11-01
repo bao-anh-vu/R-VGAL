@@ -48,9 +48,9 @@ source("./source/run_stan_lmm.R")
 
 date <- "20230329"
 regenerate_data <- F
-rerun_est_rvgal <- F
-rerun_exact_rvgal <- F
-rerun_hmc <- F
+rerun_est_rvgal <- T
+rerun_exact_rvgal <- T
+rerun_hmc <- T
 reorder_data <- F
 use_tempering <- T
 
@@ -107,14 +107,15 @@ if (reorder_data) {
 }
 
 ## Initialise the variational mean and covariance
-param_dim <- as.integer(length(beta) + 2) # theta = (beta, log(sigma_a), log(sigma_e))'
-beta_0 <- rep(0, length(beta))  
+n_fixed_effects <- ncol(linear_data$X[[1]])
+param_dim <- as.integer(n_fixed_effects + 2) # theta = (beta, log(sigma_a), log(sigma_e))'
+beta_0 <- rep(0, n_fixed_effects)  
 sigma_a_0 <- 0.5
 sigma_e_0 <- 0.5
 phi_0 <- log(sigma_a_0^2)
 psi_0 <- log(sigma_e_0^2)
 mu_0 <- c(beta_0, phi_0, psi_0)
-var_beta_0 <- rep(10, length(beta))
+var_beta_0 <- rep(10, n_fixed_effects)
 var_phi_0 <- 1
 var_psi_0 <- 1
 P_0 <- diag(c(var_beta_0, var_phi_0, var_psi_0), param_dim)

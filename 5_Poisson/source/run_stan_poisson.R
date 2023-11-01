@@ -32,11 +32,13 @@ run_stan_poisson <- function(iters, burn_in, n_chains, data, grouping, n_groups,
   
   
   if (r == 2) {
-    param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+    param_names <- c(sapply(1:p, function(x) paste0("beta[", x, "]")), 
+                     "Sigma_alpha[1,1]", 
                      "Sigma_alpha[2,1]", "Sigma_alpha[2,2]")
     
   } else {
-    param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+    param_names <- c(sapply(1:3, function(x) paste0("beta[", x, "]")), 
+                     "Sigma_alpha[1,1]", 
                      "Sigma_alpha[2,1]",
                      "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
                      "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")

@@ -30,15 +30,16 @@ rm(list = ls())
 #   })
 # }
 
-library("mvtnorm")
-library("Matrix")
-library("rstan")
+library(mvtnorm)
+library(Matrix)
+library(rstan)
 rstan_options(auto_write = TRUE)
-library("ggplot2")
-library("grid")
-library("gtable")
-library("gridExtra")
-library("reshape2")
+library(ggplot2)
+library(grid)
+library(gtable)
+library(gridExtra)
+library(reshape2)
+library(parallel)
 
 source("./source/generate_data.R")
 source("./source/run_est_rvgal.R")
@@ -49,13 +50,13 @@ source("./source/run_stan_lmm.R")
 date <- "20230329"
 regenerate_data <- F
 rerun_rvgal_sims <- F
-rerun_hmc_sims <- T
+rerun_hmc_sims <- F
 reorder_data <- F
 use_tempering <- T
 
 save_datasets <- F
 save_rvgal_sim_results <- F
-save_hmc_sim_results <- T
+save_hmc_sim_results <- F
 save_plots <- F
 
 if (use_tempering) {
@@ -108,20 +109,21 @@ if (reorder_data) {
 } else {
   reorder_info <- ""
 }
-result_directory <- "./results/multi_sims/"
+result_directory <- "./multi_sims/results/"
 
 # result_file <- paste0("linear_rvgal_multi", temper_info, reorder_info, 
 #                       "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, ".rds")
 
 ## Initialise the variational mean and covariance
-param_dim <- as.integer(length(beta) + 2) # theta = (beta, log(sigma_a), log(sigma_e))'
-beta_0 <- rep(0, length(beta))  
+n_fixed_effects <- ncol(datasets[[1]]$X[[1]])
+param_dim <- as.integer(n_fixed_effects + 2) # theta = (beta, log(sigma_a), log(sigma_e))'
+beta_0 <- rep(0, n_fixed_effects)  
 sigma_a_0 <- 0.5
 sigma_e_0 <- 0.5
 phi_0 <- log(sigma_a_0^2)
 psi_0 <- log(sigma_e_0^2)
 mu_0 <- c(beta_0, phi_0, psi_0)
-var_beta_0 <- rep(10, length(beta))
+var_beta_0 <- rep(10, n_fixed_effects)
 var_phi_0 <- 1
 var_psi_0 <- 1
 P_0 <- diag(c(var_beta_0, var_phi_0, var_psi_0), param_dim)
@@ -203,39 +205,41 @@ hmc.iters <- n_post_samples/n_chains + burn_in
 hmc_sim_results <- list()
 if (rerun_hmc_sims) {
   
-  for (sim in 8:nsims) {
-    cat("Sim", sim, "in progress... \n")
-    
-    linear_data <- datasets[[sim]]
-    
-    y <- linear_data$y
-    X <- linear_data$X
-    Z <- linear_data$Z
-    beta <- linear_data$beta
-    sigma_a <- linear_data$sigma_a
-    sigma_e <- linear_data$sigma_e
-    
-    hmc.result_file <- paste0(result_directory, 
-           "linear_hmc_N", N, "_n", n, "_", date, "_",
-           formatC(sim, width=3, flag="0"), ".rds")
-    
-    hfit <- run_stan_lmm(data = y, fixed_covariates = X, 
-                         random_covariates = Z,
-                         iters = hmc.iters, burn_in = burn_in,
-                         nchains = n_chains,
-                         prior_mean = mu_0,
-                         prior_var = P_0)
-    
-    # hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "phi", "psi"), 
-    #                    permuted = F)
-    
-    hmc_sim_results[[sim]] <- hfit #hmc.fit
-    
-    if (save_hmc_sim_results) {
-      saveRDS(hmc_sim_results[[sim]], file = hmc.result_file)
-    }
-  }
+  # for (sim in 8:nsims) {
+  #   cat("Sim", sim, "in progress... \n")
+  #   
+  #   linear_data <- datasets[[sim]]
+  #   
+  #   y <- linear_data$y
+  #   X <- linear_data$X
+  #   Z <- linear_data$Z
+  #   beta <- linear_data$beta
+  #   sigma_a <- linear_data$sigma_a
+  #   sigma_e <- linear_data$sigma_e
+  #   
+  #   hmc.result_file <- paste0(result_directory, 
+  #          "linear_hmc_N", N, "_n", n, "_", date, "_",
+  #          formatC(sim, width=3, flag="0"), ".rds")
+  #   
+  #   hfit <- run_stan_lmm(data = y, fixed_covariates = X, 
+  #                        random_covariates = Z,
+  #                        iters = hmc.iters, burn_in = burn_in,
+  #                        nchains = n_chains,
+  #                        prior_mean = mu_0,
+  #                        prior_var = P_0)
+  #   
+  #   # hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "phi", "psi"), 
+  #   #                    permuted = F)
+  #   
+  #   hmc_sim_results[[sim]] <- hfit #hmc.fit
+  #   
+  #   if (save_hmc_sim_results) {
+  #     saveRDS(hmc_sim_results[[sim]], file = hmc.result_file)
+  #   }
+  # }
   
+  sims <- 1:100
+  parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 10L)
   
 } else {
   

@@ -1,5 +1,5 @@
 compute_grad_hessian2 <- tf_function(
-  compute_grad_hessian2 <- function(y_i, X_i, Z_i, alpha_i, theta) {
+  compute_grad_hessian2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
     
     # n_fixed_effects <- as.integer(ncol(X_i))#tf$cast(ncol(X_i), dtype = "int64")
     # n_random_effects <- as.integer(ncol(Z_i)) #tf$cast(ncol(Z_i), dtype = "int64")
@@ -7,7 +7,7 @@ compute_grad_hessian2 <- tf_function(
     # # n <- tf$cast(length(y_i), dtype = "int64")
     # S_alpha <- as.integer(ncol(alpha_i))
     
-    autodiff_out <- compute_joint_llh_tf2(y_i, X_i, Z_i, alpha_i, theta)
+    autodiff_out <- compute_joint_llh_tf2(y_i, X_i, Z_i, alpha_i, theta, S_alpha)
     
     joint_grads <- autodiff_out$grad
     joint_hessians <- autodiff_out$hessian
@@ -47,7 +47,7 @@ reduce_retracing = T)
 
 
 # compute_joint_llh_tf2 <- tf_function(
-  compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta) {
+  compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   
   with (tf$GradientTape() %as% tape2, {
     with (tf$GradientTape(persistent = TRUE) %as% tape1, {
@@ -57,8 +57,7 @@ reduce_retracing = T)
       param_dim <- as.integer(ncol(theta))
       # n <- tf$cast(length(y_i), dtype = "int64")
       
-      S_alpha <- as.integer(dim(alpha_i)[2])
-      
+      # S_alpha <- as.integer(dim(alpha_i)[2])
       beta_tf <- theta[, 1:n_fixed_effects]
       
       Lelements_tf <-  theta[, (n_fixed_effects+1):param_dim]
@@ -94,7 +93,11 @@ reduce_retracing = T)
       Z_i_reshaped2 <- tf$reshape(Z_i_tf_tiled, c(1L, dim(Z_i_tf_tiled)))
       Z_i_tf_tiled2 <- tf$tile(Z_i_reshaped2, c(S, 1L, 1L, 1L))
       
-      alpha_i_reshaped <- tf$reshape(alpha_i, c(dim(alpha_i), 1L))
+      if (n_random_effects == 1) {
+        alpha_i_reshaped <- tf$reshape(alpha_i, c(dim(alpha_i), 1L, 1L))
+      } else {
+        alpha_i_reshaped <- tf$reshape(alpha_i, c(dim(alpha_i), 1L))
+      }
       
       lambda_i_tf <- tf$exp(tf$linalg$matmul(X_i_tf_tiled2, beta_tf_tiled) + 
                               tf$linalg$matmul(Z_i_tf_tiled2, alpha_i_reshaped))
@@ -131,16 +134,21 @@ reduce_retracing = T)
       #   tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
       #   1/2 * tf$squeeze(tf$linalg$matmul(tf$transpose(Amat, perm = c(0L, 2L, 1L)), Amat))
       
-      norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
-      llh_alpha_i_tf <- norm$log_prob(alpha_i)
+      if (n_random_effects == 1) {
+        norm <- tfd$Normal(loc = 0, scale = L_tf_tiled)
+        llh_alpha_i_tf <- tf$squeeze(norm$log_prob(alpha_i_reshaped))
+      } else {
+        norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
+        llh_alpha_i_tf <- norm$log_prob(alpha_i)
+      }
       # llh_alpha_i_og <- norm$log_prob(alpha_i_og)
       
       log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
       
+      theta_reshape <- tf$reshape(theta, c(dim(theta)[1], 1L, dim(theta)[2]))
+      theta_tiled <- tf$tile(theta_reshape, c(1L, S_alpha, 1L))
     })
-    
     grad_tf %<-% tape1$batch_jacobian(log_likelihood_tf, theta)
-    
   })
   # grad2_tf %<-% tape2$batch_jacobian(grad_tf, theta)
   grad2_tf %<-% tape2$batch_jacobian(grad_tf, theta)

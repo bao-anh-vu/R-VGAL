@@ -29,7 +29,7 @@ if (length(gpus) > 0) {
     # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
     tf$config$experimental$set_virtual_device_configuration(
       gpus[[1]],
-      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4*4096))
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=8*4096))
     )
     
     logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
@@ -50,10 +50,10 @@ source("./source/generate_data.R")
 source("./source/compute_grad_hessian_all.R")
 
 ## Flags
-date <- "20231018" #"20231013" has 3 random effects, "20231018" has 2  
-regenerate_data <- T
-rerun_rvga <- T
-rerun_stan <- T
+date <- "20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
+regenerate_data <- F
+rerun_rvga <- F
+rerun_stan <- F
 save_data <- F
 save_rvgal_results <- F
 save_hmc_results <- F
@@ -77,7 +77,7 @@ n_random_effects <- 2
 set.seed(2023)
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(0.5, -0.75) #  c(-0.5, 0.25)#, 0.5, 0.25)
+beta <- c(-0.75, -0.25, 0.25, 0.5) #  c(-0.5, 0.25)#, 0.5, 0.25)
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
@@ -119,13 +119,13 @@ if (reorder_data) {
   X <- reordered_X
 }
 
-# hist(unlist(y))
+hist(unlist(y))
 
 ###################
 ##     R-VGA     ##
 ###################
-S <- 20L
-S_alpha <- 20L
+S <- 50L
+S_alpha <- 50L
 
 ## Set up result directory
 if (use_tempering) {
@@ -157,11 +157,13 @@ P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
 
 ## Plot prior samples first
 if (n_random_effects == 2) {
-  param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+  param_names <- c(sapply(1:n_fixed_effects, function(x) paste0("beta[", x, "]")), 
+                   "Sigma_alpha[1,1]", 
                    "Sigma_alpha[2,1]", "Sigma_alpha[2,2]")
   
 } else {
-  param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
+  param_names <- c(sapply(1:n_fixed_effects, function(x) paste0("beta[", x, "]")), 
+                   "Sigma_alpha[1,1]", 
                    "Sigma_alpha[2,1]",
                    "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
                    "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
@@ -453,9 +455,14 @@ print(rvga.time)
 
 ## Trajectory for R-VGA
 if (plot_trace) {
+  par(mfrow = c(2, ceiling(param_dim/2)))
   trajectories <- list()
   for (p in 1:param_dim) {
-    trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
+    if (p > n_fixed_effects && p <= (n_fixed_effects + n_random_effects)) {
+      trajectories[[p]] <- sapply(1:N, function(x) exp(rvgal_results$mu[[x]][p])^2)
+    } else {
+      trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
+    }
     plot(trajectories[[p]], main = param_names[p], type = "l")
     abline(h = true_vals[p], lty = 2, col = "red")
   }

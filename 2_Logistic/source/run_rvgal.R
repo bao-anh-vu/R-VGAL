@@ -105,8 +105,40 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       grad_omega_tf <- tf64(-1/2) + tf64(1/2) * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
                                                    tf$exp(omega_tf_3))
       
-      grad_theta_tf <- tf$concat(list(grad_beta_tf, grad_omega_tf),
-                                 2L)
+      grad_theta_tf <- tf$concat(list(grad_beta_tf, grad_omega_tf), 2L)
+      ###### Grad from Tan and Nott ######
+      for (l in 1:S) {
+        # Extract the l-th element from tf here
+        alpha_l <- as.matrix(alpha_all[l, ])
+        
+        beta_l <- as.vector(beta_s_all_tf[l, ])
+        Sigma_alpha_l <- tau_s_all[l, ]^2 # Sigma_alpha is called tau here
+        
+        W <- t(chol(Sigma_alpha_l))
+        W_inv <- solve(W)
+        
+        grad_beta <- list()
+        grad_omega <- list()
+        
+        for (s in 1:S_alpha) {
+          alpha_l_s <- alpha_l[s]
+          
+          grad_beta[[s]] <- t(y[[i]] - 1/(1 + exp(-(X[[i]] %*% beta_l + alpha_l_s)))) %*% X[[i]] #- 1/prior_var_beta * beta_l
+          
+          I_omega <- W #diag(alpha_l_s)
+          I_omega[lower.tri(I_omega)] <- 1
+          
+          A <- t(W_inv) %*% W_inv %*% (t(alpha_l_s) %*% alpha_l_s) %*% t(W_inv)
+          
+          I_d <- 1
+          grad_omega[[s]] <- - I_d[lower.tri(I_d, diag = T)] + 
+            I_omega[lower.tri(I_omega, diag = T)] * A[lower.tri(A, diag = T)]
+        }
+        browser()
+        
+      }
+      
+      ################ end ################
       
       probs_tf <-   tf$squeeze(tf$math$reciprocal(tf64(1) + tf$exp(-TempMat)))
       rho_tf <- tf$linalg$diag(probs_tf * (tf64(1) - probs_tf))

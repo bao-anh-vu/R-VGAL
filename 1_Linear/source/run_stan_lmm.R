@@ -18,6 +18,7 @@ run_stan_lmm <- function(data, fixed_covariates,
   grouping <- rep(1:N, each = n)
   
   p <- ncol(fixed_covariates[[1]])
+  
   linearmm_data <- list(N = N * n, M = N, K = p, 
                         y = y_long, x = X_long, z = Z_long, g = grouping,
                         prior_mean_beta = prior_mean[1:p], 
