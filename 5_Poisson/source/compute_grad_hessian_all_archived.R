@@ -43,11 +43,11 @@ compute_grad_hessian2 <- tf_function(
     
     return(list(grad = grad, hessian = hessian))    
   }, 
-  reduce_retracing = T)
+reduce_retracing = T)
 
 
-compute_joint_llh_tf2 <- tf_function(
-compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
+# compute_joint_llh_tf2 <- tf_function(
+  compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   
   with (tf$GradientTape() %as% tape2, {
     with (tf$GradientTape(persistent = TRUE) %as% tape1, {
@@ -56,7 +56,6 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       n_random_effects <- as.integer(ncol(Z_i)) #tf$cast(ncol(Z_i), dtype = "int64")
       param_dim <- as.integer(ncol(theta))
       # n <- tf$cast(length(y_i), dtype = "int64")
-      
       # S_alpha <- as.integer(dim(alpha_i)[2])
       beta_tf <- theta[, 1:n_fixed_effects]
       
@@ -112,18 +111,17 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       #   tf$squeeze(tf$reduce_sum(tf$math$lgamma(y_i_tiled + 1), 2L))
       ## these can be used as the log weights too
       
-      y_i_reshape <- tf$reshape(y_i, c(1L, dim(y_i)))
-      y_i_tiled <- tf$tile(y_i_reshape, c(S_alpha, 1L))
+      y_i_reshape <- tf$reshape(y_i, c(1L, dim(y_i), 1L))
+      y_i_tiled <- tf$tile(y_i_reshape, c(S_alpha, 1L, 1L))
       
       y_i_reshape2 <- tf$reshape(y_i_tiled, c(1L, dim(y_i_tiled)))
-      y_i_tiled2 <- tf$tile(y_i_reshape2, c(S, 1L, 1L))
+      y_i_tiled2 <- tf$tile(y_i_reshape2, c(S, 1L, 1L, 1L))
       
-      
-      pois <- tfd$Poisson(rate = tf$squeeze(lambda_i_tf))
+      pois <- tfd$Poisson(rate = lambda_i_tf)
       
       llh_y_i_tf_s <- pois$log_prob(y_i_tiled2)
       llh_y_i_tf <- tf$reduce_sum(llh_y_i_tf_s, 2L) # should be size S x S_alpha
-      
+      llh_y_i_tf <- tf$reshape(llh_y_i_tf, c(dim(llh_y_i_tf)[1], dim(llh_y_i_tf)[2]))
       # Lsamples_tf_reshape <- tf$reshape(Lsamples_tf, c(1L, dim(Lsamples_tf)))
       # Lsamples_tf_tiled <- tf$tile(Lsamples_tf_reshape, c(S_alpha, 1L, 1L))
       # alpha_i_reshape <- tf$reshape(alpha_i, c(dim(alpha_i), 1L))
@@ -145,26 +143,21 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       
       log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
       
+      
+      log_likelihood_tf_reshape <- tf$reshape(log_likelihood_tf, c(dim(log_likelihood_tf), 1L, 1L))
       theta_reshape <- tf$reshape(theta, c(dim(theta)[1], 1L, dim(theta)[2]))
       theta_tiled <- tf$tile(theta_reshape, c(1L, S_alpha, 1L))
-      
-      # ## Testing theoretical gradient
-      # TempMat <- tf$squeeze(tf$linalg$matmul(X_i_tf_tiled2, beta_tf_tiled) + tf$linalg$matmul(X_i_tf_tiled2, alpha_i_reshaped))
-      # grad_tf_test <- -tf$linalg$matmul(tf$linalg$matmul(tf$linalg$matrix_transpose(X_i_tf_tiled2),
-      #                                                     tf$linalg$diag(tf$exp(TempMat))),
-      #                                   X_i_tf_tiled2)
-      #                                  
-                                       # -tf$linalg$matmul(
-                                       #   tf$linalg$matmul(
-                                       #     tf$linalg$matrix_transpose(X_i_tf5),
-                                       #     rho_tf),
-                                       #   X_i_tf5)
-                                       
     })
+    # browser()
+    # grad_tf %<-% tape1$batch_jacobian(log_likelihood_tf_reshape, theta_tiled)
     grad_tf %<-% tape1$batch_jacobian(log_likelihood_tf, theta)
+    
+    # grad_tf_test %<-% tape1$batch_jacobian(log_likelihood_tf_reshape, theta_tiled)
+    browser()
   })
   # grad2_tf %<-% tape2$batch_jacobian(grad_tf, theta)
   grad2_tf %<-% tape2$batch_jacobian(grad_tf, theta)
+  
   
   # ## Computing the weights in importance sampling
   log_weights <- llh_y_i_tf
@@ -177,16 +170,14 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
                        tf$tile(sum_weights_reshape, c(1L, S_alpha))) # normalised weights
   
   return(list(llh = log_likelihood_tf,
-              llh_y = llh_y_i_tf,
-              llh_alpha = llh_alpha_i_tf,
               grad = grad_tf,
               hessian = grad2_tf,
               log_weights = log_weights,
               weights = weights))
-},
-reduce_retracing = T)
+}#,
+# reduce_retracing = T)
 
-fill_lower_tri_tf <- tf_function(
+# fill_lower_tri_tf <- tf_function(
 fill_lower_tri2 <- function(dim, vals) {
   
   
@@ -199,8 +190,10 @@ fill_lower_tri2 <- function(dim, vals) {
   
   nlower <- as.integer(d*(d-1)/2)
   numlower = vals[, (d+1):(d+nlower)]
-  numlower = tf$reshape(numlower, c(S*nlower, 1L))
-  numlower = tf$squeeze(numlower)
+  # if (S != 1L) {
+    numlower = tf$reshape(numlower, c(S*nlower, 1L))
+    numlower = tf$squeeze(numlower)
+  # }
   
   ones = tf$ones(c(d, d), dtype="int64")
   mask_a = tf$linalg$band_part(ones, -1L, 0L)  # Upper triangular matrix of 0s and 1s
@@ -217,17 +210,22 @@ fill_lower_tri2 <- function(dim, vals) {
   # out = tf$SparseTensor(indices, numlower, 
   #                       dense_shape = tf$cast(c(d, d), dtype="int64"))
   # lower_tri = tf$sparse$to_dense(out)
-  
   shape <- tf$cast(c(S*d, d), dtype="int64")
   # shape_test <- tf$reshape(shape, c(dim(shape), 1L))
   # batch_shapes <- tf$tile(shape, c(S, 1L))
-  out = tf$SparseTensor(indices, numlower, 
-                        dense_shape = shape)
+  if (S == 1L) {
+    out = tf$SparseTensor(indices, as.numeric(numlower), 
+                          dense_shape = shape)
+  } else {
+    out = tf$SparseTensor(indices, numlower, 
+                          dense_shape = shape)
+  }
+  
   lower_tri = tf$sparse$to_dense(out)
   lower_tri_reshaped = tf$reshape(lower_tri, c(S, d, d))
   
   L = diag_mat + lower_tri_reshaped
   
   return(L)
-}, reduce_retracing = T
-)
+}
+# )

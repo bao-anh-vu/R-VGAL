@@ -1,4 +1,4 @@
-generate_data <- function(N, n, beta, Sigma_alpha, date) {
+generate_data <- function(N, n, beta, Sigma_alpha, date, seed = NULL) {
   
   X <- list() # covariates for fixed effects
   Z <- list() # covariates for random effects
@@ -6,7 +6,9 @@ generate_data <- function(N, n, beta, Sigma_alpha, date) {
   y <- list()
   alpha <- list()
   
-  set.seed(2023)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
   
   for (i in 1:N) {
     X[[i]] <- matrix(rnorm(n * length(beta)), nrow = n, ncol = length(beta))
