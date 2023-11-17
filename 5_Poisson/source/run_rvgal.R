@@ -63,7 +63,6 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
       Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
       
-      
       ####### Development ###########
       beta_all <- samples[, 1:n_fixed_effects]
       

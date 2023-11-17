@@ -47,20 +47,21 @@ if (length(gpus) > 0) {
 source("./source/run_rvgal.R")
 source("./source/run_stan_poisson.R")
 source("./source/generate_data.R")
+source("./source/generate_data2.R")
 # source("./source/compute_joint_llh_tf.R")
 # source("./source/compute_grad_hessian_all.R")
 source("./source/compute_grad_hessian_theoretical.R")
 
 ## Flags
-date <- "20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
+date <-"20231018" #  "20231116" #has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
-rerun_rvga <- F
+rerun_rvga <- T
 rerun_stan <- F
 save_data <- F
 save_rvgal_results <- F
 save_hmc_results <- F
 plot_prior <- F
-save_plots <- F
+save_plots <- T
 reorder_data <- F
 use_tempering <- T
 
@@ -68,7 +69,7 @@ plot_trace <- F
 
 if (use_tempering) {
   n_obs_to_temper <- 10
-  K <- 4
+  K <- 10
   a_vals_temper <- rep(1/K, K)
 }
 
@@ -79,23 +80,39 @@ n_random_effects <- 2
 set.seed(2023)
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-0.75, 1.25) 
-nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
+beta <- 0
 Sigma_alpha <- 0
-if (grepl("_0", date)) {
-  Sigma_alpha <- 0.1*diag(1:n_random_effects)
+if (date == "20231116") {
+  beta <- c(6.56, -0.23, 0.58)
+  Sigma_alpha <- matrix(c(0.54, -0.013, -0.013, 0.01), 2, 2)
 } else {
-  L <- matrix(0, n_random_effects, n_random_effects)
-  L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
-  Sigma_alpha <- tcrossprod(L)
-  Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
+  beta <- c(-0.5, 1.25) 
+  nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
+  
+  Sigma_alpha <- 0
+  if (grepl("_0", date)) {
+    Sigma_alpha <- 0.1*diag(1:n_random_effects)
+  } else {
+    # L <- matrix(0, n_random_effects, n_random_effects)
+    # L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
+    # Sigma_alpha <- tcrossprod(L)
+    # Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
+    Sigma_alpha <- matrix(c(0.5, 0.15, 0.15, 0.3), 2, 2)
+  }
 }
 
 if (regenerate_data) {
-  poisson_data <- generate_data(N = N, n = n, beta = beta, 
-                                Sigma_alpha = Sigma_alpha,
-                                seed = 2023)
+  if (date == "20231116") {
+    poisson_data <- generate_data2(N = N, n = n, beta = beta, 
+                                  Sigma_alpha = Sigma_alpha,
+                                  seed = 2023)
+  } else {
+    poisson_data <- generate_data(N = N, n = n, beta = beta, 
+                                  Sigma_alpha = Sigma_alpha,
+                                  seed = 2023)
+  }
+  
   if (save_data) {
     saveRDS(poisson_data, file = paste0("./data/poisson_data_N", N, "_n", n, 
                                         "_", n_random_effects, "d_", date, ".rds"))
@@ -125,7 +142,6 @@ if (reorder_data) {
 }
 
 hist(unlist(y))
-
 ###################
 ##     R-VGA     ##
 ###################
@@ -202,7 +218,6 @@ if (plot_prior) {
     plot(density(rvgal.prior_samples[, p]))
     abline(v = true_vals[p], lty = 2)
   }
-  
 }
 
 #################
