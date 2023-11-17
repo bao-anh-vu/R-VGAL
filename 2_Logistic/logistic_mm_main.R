@@ -25,7 +25,7 @@ source("./source/generate_data.R")
 ## Flags
 date <- "20230329"  
 regenerate_data <- F
-rerun_rvga <- T
+rerun_rvga <- F
 rerun_stan <- F
 save_data <- F
 save_rvga_results <- F
@@ -49,6 +49,7 @@ tau <- 0.9
 
 if (regenerate_data) {
   logistic_data <- generate_data(N = N, n = n, beta = beta, tau = tau,
+                                 seed = 2023,
                                  save_data = save_data, date = date)
 } else {
   logistic_data <- readRDS(file = paste0("./data/logistic_data_N", N, "_n", n, "_", "20230329", ".rds"))
@@ -74,7 +75,7 @@ if (reorder_data) {
 ###################
 ##     R-VGA     ##
 ###################
-S <- 10L
+S <- 100L
 S_alpha <- 100L
 
 ## Set up result directory

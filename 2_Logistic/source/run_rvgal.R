@@ -106,52 +106,70 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
                                                    tf$exp(omega_tf_3))
       
       grad_theta_tf <- tf$concat(list(grad_beta_tf, grad_omega_tf), 2L)
-      ###### Grad from Tan and Nott ######
-      for (l in 1:S) {
-        # Extract the l-th element from tf here
-        alpha_l <- as.matrix(alpha_all[l, ])
-        
-        beta_l <- as.vector(beta_s_all_tf[l, ])
-        Sigma_alpha_l <- tau_s_all[l, ]^2 # Sigma_alpha is called tau here
-        
-        W <- t(chol(Sigma_alpha_l))
-        W_inv <- solve(W)
-        
-        grad_beta <- list()
-        grad_omega <- list()
-        
-        for (s in 1:S_alpha) {
-          alpha_l_s <- alpha_l[s]
-          
-          grad_beta[[s]] <- t(y[[i]] - 1/(1 + exp(-(X[[i]] %*% beta_l + alpha_l_s)))) %*% X[[i]] #- 1/prior_var_beta * beta_l
-          
-          I_omega <- W #diag(alpha_l_s)
-          I_omega[lower.tri(I_omega)] <- 1
-          
-          A <- t(W_inv) %*% W_inv %*% (t(alpha_l_s) %*% alpha_l_s) %*% t(W_inv)
-          
-          I_d <- 1
-          grad_omega[[s]] <- - I_d[lower.tri(I_d, diag = T)] + 
-            I_omega[lower.tri(I_omega, diag = T)] * A[lower.tri(A, diag = T)]
-        }
-        browser()
-        
-      }
-      
-      ################ end ################
       
       probs_tf <-   tf$squeeze(tf$math$reciprocal(tf64(1) + tf$exp(-TempMat)))
       rho_tf <- tf$linalg$diag(probs_tf * (tf64(1) - probs_tf))
+      # rho_tf_diag <- probs_tf * (tf64(1) - probs_tf)
       
       grad2_beta_tf <- -tf$linalg$matmul(
         tf$linalg$matmul(
           tf$linalg$matrix_transpose(X_i_tf5),
           rho_tf),
         X_i_tf5)
+      
       grad2_omega_tf <- tf64(-1/2) * tf$math$divide(tf$expand_dims(tf$math$square(alpha_tf_3[,,1L,]), 3L),
                                               tf$exp(omega_tf_3))
       
-      
+      ###### Grad from Tan and Nott ######
+      # hess_beta <- list()
+      # for (l in 1:S) {
+      #   # Extract the l-th element from tf here
+      #   alpha_l <- as.matrix(alpha_all[l, ])
+      #   
+      #   beta_l <- as.vector(beta_s_all_tf[l, ])
+      #   Sigma_alpha_l <- tau_s_all[l, ]^2 # Sigma_alpha is called tau here
+      #   
+      #   W <- t(chol(Sigma_alpha_l))
+      #   W_inv <- solve(W)
+      #   
+      #   grad_beta <- list()
+      #   grad_omega <- list()
+      #   hess_beta_l <- list()
+      #   for (s in 1:S_alpha) {
+      #     alpha_l_s <- alpha_l[s]
+      #     
+      #     grad_beta[[s]] <- t(y[[i]] - 1/(1 + exp(-(X[[i]] %*% beta_l + alpha_l_s)))) %*% X[[i]] #- 1/prior_var_beta * beta_l
+      #     
+      #     I_omega <- W #diag(alpha_l_s)
+      #     I_omega[lower.tri(I_omega)] <- 1
+      #     
+      #     A <- t(W_inv) %*% W_inv %*% (t(alpha_l_s) %*% alpha_l_s) %*% t(W_inv)
+      #     
+      #     I_d <- 1
+      #     grad_omega[[s]] <- - I_d[lower.tri(I_d, diag = T)] + 
+      #       I_omega[lower.tri(I_omega, diag = T)] * A[lower.tri(A, diag = T)]
+      #     
+      #     ## Hessian
+      #     # for (j in 1:n) { # vectorise later
+      #     #   grad2_beta[[j]] <- as.numeric(- exp(-X[[i]][j, ] %*% beta_l + alpha_l_s) /
+      #     #                                   (1 + exp(-X[[i]][j, ] %*% beta_l + alpha_l_s))^2) *
+      #     #     tcrossprod(X[[i]][j, ])
+      #     # }
+      #     # hess_beta[[s]] <- Reduce("+", grad2_beta)
+      #     grad2_beta_vec <- t(X[[i]]) %*% diag(as.vector(- exp(-(X[[i]] %*% beta_l + alpha_l_s)) /
+      #                                                      (1 + exp(-(X[[i]] %*% beta_l + alpha_l_s)))^2)) %*% X[[i]]
+      #     hess_beta_l[[s]] <- grad2_beta_vec
+      #     
+      #     probs <- 1/(1+exp(-X[[i]] %*% beta_l - alpha_l_s))
+      #     browser()
+      #     # 
+      #     # grad2_beta_vec <- probs * (1-probs)
+      #   }
+      #   hess_beta[[l]] <- hess_beta_l
+      #   browser()
+      # }
+      # 
+      ####################
       ## Put some padding around grad2_beta (4x4) and grad2_omega(1x1) so that 
       ## they both become 5x5, then add them to form grad2_theta (5x5)
       grad2_theta_tf <-   tf$pad(grad2_beta_tf, matrix(c(0L,0L, 0L, 0L, 0L, 1L, 0L, 1L), 4, 2, byrow = TRUE)) +
@@ -185,7 +203,6 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       E_score_tf <- tf$math$reduce_mean(score_all_tf, 0L)
       E_hessian_tf <- tf$math$reduce_mean(Hessian_all_tf, 0L)
-      
       # cat("a =", a, "\n")
       prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
       mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))       

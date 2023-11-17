@@ -41,12 +41,13 @@ run_stan_lmm <- function(data, fixed_covariates,
   hmc.summ <- summary(hfit, pars = param_names)$summary
   hmc.n_eff <- hmc.summ[, "n_eff"]
   hmc.Rhat <- hmc.summ[, "Rhat"]
+  hmc.time <- get_elapsed_time(hfit)
   
   hmc_results <- list(post_samples = hmc.fit,
                       summary = hmc.summ,
                       n_eff = hmc.n_eff,
                       Rhat = hmc.Rhat, 
-                      time = get_elapsed_time(hfit))
+                      time = )
   
   # if (save_hmc_results) {
   #   saveRDS(hfit, file = paste0("linear_mm_hmc_N", N, "_n", n, "_", date, ".rds"))

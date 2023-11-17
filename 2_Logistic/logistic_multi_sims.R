@@ -55,7 +55,7 @@ save_datasets <- F
 save_rvgal_sim_results <- F
 save_hmc_sim_results <- F
 plot_miniplots <- F
-save_plots <- F
+save_plots <- T
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -109,7 +109,7 @@ if (reorder_data) {
 } else {
   reorder_info <- ""
 }
-result_directory <- "./results/multi_sims/"
+result_directory <- "./multi_sims/results/"
 
 # result_file <- paste0("logistic_rvgal_multi", temper_info, reorder_info, 
 #                       "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, ".rds")
@@ -469,29 +469,55 @@ sds_df$param <- rep(param_names, each = nsims)
 sds_df$sim <- rep(1:nsims, param_dim)
 
 ## Plot of R-VGAL means against HMC means
-plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + geom_point() +
-  geom_abline(linetype = 2) +
+plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + 
+  geom_abline(linetype = 2, lwd = 1, col = "red") +
+  geom_point(size = 3) +
   labs(x = "HMC means", y = "R-VGAL means") +
   theme_bw() +
-  facet_wrap(~param, scales = "free", nrow = 2)
+  theme(strip.text.x = element_text(size = 24)) +
+  theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+  facet_wrap(~param, scales = "free", nrow = 2, labeller=label_parsed)
 print(plot_means)
+
+if (save_plots) {
+  filename = paste0("logistic_multi_sim_means_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1000, height = 600)
+  print(plot_means)
+  dev.off()
+}
 
 ## Plot of the variance ratio between R-VGAL and HMC
 plot_sds <- ggplot(sds_df, aes(x = sim, y = ratio)) + 
-              geom_point() +
-              geom_abline(slope = 0, intercept = 1, linetype = 2) +
+              geom_abline(slope = 0, intercept = 1, linetype = 2, lwd = 1, col = "red") +
+              geom_point(size = 3) +
               labs(x = "Simulation", y = "SD ratio") +
               theme_bw() +
-              facet_wrap(~param, scales = "free")
+              theme(strip.text.x = element_text(size = 24)) +
+              theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+              facet_wrap(~param, scales = "free", labeller=label_parsed)
 print(plot_sds)
 
+if (save_plots) {
+  filename = paste0("logistic_multi_sim_sds_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1000, height = 600)
+  print(plot_sds)
+  dev.off()
+}
+
 ## Do a plot here of R-VGAL mean - true parameter and HMC mean - true param
-plot_means_diff <- ggplot(means_df, aes(hmc_diff, rvgal_diff)) + geom_point() +
+plot_means_diff <- ggplot(means_df, aes(hmc_diff, rvgal_diff)) + 
+  geom_point(size = 3) +
   geom_abline(linetype = 2) +
   labs(x = "Difference between HMC mean and true parameter", 
        y = "Difference between R-VGAL mean and true parameter") +
   theme_bw() +
-  facet_wrap(~param, scales = "free")
+  facet_wrap(~param, scales = "free", labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) + 
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
 print(plot_means_diff)
 
 # Plot differences per simulation
@@ -502,13 +528,28 @@ plot_means_diff3 <- ggplot(means_df, aes(rep(1:nsims, param_dim), rvgal_diff)) +
   labs(x = "Simulation",
        y = "Difference between R-VGAL/HMC means and true parameter") +
   theme_bw() +
-  facet_wrap(~param, scales = "free", nrow = param_dim, labeller=label_parsed)
+  facet_wrap(~param, scales = "free", nrow = param_dim, labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) + 
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
 print(plot_means_diff3)
 
+# Plot densities of the differences
 plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) + 
-  geom_density(colour = "red") +
-  geom_density(data = means_df, aes(x = hmc_diff), colour = "blue") +
+  geom_density(colour = "red", lwd = 1) +
+  geom_density(data = means_df, aes(x = hmc_diff), colour = "blue", lwd = 1) +
   labs(x = "Differences", y = "Density") + 
   theme_bw() +
-  facet_wrap(~param, ncol = param_dim, labeller=label_parsed)
+  facet_wrap(~param, ncol = param_dim, labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) +
+  scale_x_continuous(n.breaks=4) +
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
 print(plot_dens_diff)
+
+if (save_plots) {
+  filename = paste0("logistic_multi_sim_difference_dens_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1200, height = 300)
+  print(plot_dens_diff)
+  dev.off()
+} 

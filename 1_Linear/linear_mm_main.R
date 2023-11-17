@@ -47,10 +47,10 @@ source("./source/run_exact_rvgal.R")
 source("./source/run_stan_lmm.R")
 
 date <- "20230329"
-regenerate_data <- F
-rerun_est_rvgal <- T
-rerun_exact_rvgal <- T
-rerun_hmc <- T
+regenerate_data <- T
+rerun_est_rvgal <- F
+rerun_exact_rvgal <- F
+rerun_hmc <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -78,7 +78,7 @@ if (regenerate_data) {
   sigma_e <- 0.7
   beta <- c(-1.5, 1.5, 0.5, 0.25) 
   
-  linear_data <- generate_data(beta, sigma_a, sigma_e)
+  linear_data <- generate_data(beta, sigma_a, sigma_e, seed = 2023)
   
   if (save_data) {
     saveRDS(linear_data, file = paste0("./data/linear_data_N", N, "_n", n, "_", date, ".rds"))
@@ -414,7 +414,6 @@ if (save_plots) {
 # legend("topright", legend = c("Prior", "Posterior"), col = c("black", "red"), lty = 1)
 
 ## Time benchmark
-hmc.time <- sum(colSums(hfit$time))
+hmc.time <- sum(colSums(hfit$time)) # sum over all chains
 rvga.time <- est_rvgal_results$time_elapsed
-print(hmc.time)
-print(rvga.time)
+cat("HMC time:", hmc.time, ", R-VGAL time:", rvga.time[3], "\n")

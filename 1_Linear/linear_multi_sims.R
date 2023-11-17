@@ -54,10 +54,12 @@ rerun_hmc_sims <- F
 reorder_data <- F
 use_tempering <- T
 
+plot_miniplots <- F
+
 save_datasets <- F
 save_rvgal_sim_results <- F
 save_hmc_sim_results <- F
-save_plots <- F
+save_plots <- T
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -279,13 +281,77 @@ for (sim in 1:nsims) {
 }
 
 subscripts <- c("1", "2", "3", "4")
-param_values <- c(beta, sigma_a, sigma_e)
+true_vals <- c(beta, sigma_a, sigma_e)
+
+if (plot_miniplots) {
+  param_plots <- list()
+  for (p in 1:param_dim) {
+    param_df <- data.frame(x = true_vals[p])
+    
+    # if (p == param_dim) { # if the parameter is sigma_a or sigma_e
+    rvgal.post_samples_p <- lapply(rvgal.sim_results_list, function(x) x[, p])
+    hmc.post_samples_p <- lapply(hmc.sim_results_list, function(x) x[, p])
+    
+    rvgal.post_samples_df <- as.data.frame(rvgal.post_samples_p,
+                                           col.names = 1:length(rvgal.sim_results_list))
+    
+    hmc.post_samples_df <- as.data.frame(hmc.post_samples_p,
+                                         col.names = 1:length(rvgal.sim_results_list))
+    mini_plots <- list()
+    for (sim in 1:25) {
+      
+      # post_samples_df <- data.frame(rvgal_samples = rvgal.post_samples_p, 
+      #                               hmc_samples = hmc.post_samples_p, 
+      #                               )
+      mini_plot <- ggplot(rvgal.post_samples_df, aes(x = .data[[paste0("X", sim)]])) + #geom_line(aes(colour = series))
+        # geom_density(aes(col = method)) +
+        geom_density(colour = "red") +
+        # scale_color_brewer(palette="Reds") +
+        geom_density(data = hmc.post_samples_df, aes(x = .data[[paste0("X", sim)]]),
+                     colour = "blue") +
+        # scale_color_brewer(palette="Blues") +
+        geom_vline(data = param_df, aes(xintercept=x),
+                   color="black", linetype="dashed") +
+        theme_bw() +
+        theme(legend.position="none") #+
+      
+      if (p == param_dim) {
+        mini_plot <- mini_plot + labs(x = bquote(sigma[epsilon]))
+      } else if (p == (param_dim - 1)) {
+        mini_plot <- mini_plot + labs(x = bquote(sigma[alpha]))
+      } else {
+        mini_plot <- mini_plot + labs(x = bquote(beta[.(subscripts[p])]))
+      }
+      mini_plots[[sim]] <- mini_plot
+      # print(mini_plots[[sim]])
+      
+    }
+    param_plots[[p]] <- mini_plots
+    
+    if (save_plots) {
+      
+      if (p == param_dim) {
+        param_name <- "sigma"
+      } else {
+        param_name <- paste0("beta", p)
+      }
+      filename = paste0("multi_sim_", param_name, "_", date, ".png")
+      filepath = paste0("./plots/multi_sims/", filename)
+      png(filepath, width = 1000, height = 800)
+      grid.arrange(grobs = mini_plots, nrow = 5, ncol = 5)
+      dev.off()
+      
+    } else {
+      grid.arrange(grobs = mini_plots, nrow = 5, ncol = 5)
+    }
+  }
+}
 
 param_plots <- list()
 for (p in 1:param_dim) {
   
   # hmc.df <- data.frame(samples = hmc.samples[, p])
-  param_df <- data.frame(x = param_values[p])
+  param_df <- data.frame(x = true_vals[p])
   rvgal.post_samples_p <- lapply(rvgal.sim_results_list, function(x) x[, p])
   hmc.post_samples_p <- lapply(hmc.sim_results_list, function(x) x[, p])
   
@@ -354,21 +420,6 @@ for (p in 1:param_dim) {
   param_plots[[p]] <- plot
 }
 
-## Saving the plots
-if (save_plots) {
-  
-  filename = paste0("multi_sim", temper_info, reorder_info,
-                    "_S", S, "_Sa", S_alpha, "_", date, ".png")
-  filepath = paste0(result_directory, filename)
-  
-  png(filepath, width = 700, height = 400)
-  grid.arrange(grobs = param_plots, nrow = 2, ncol = 3)
-  dev.off()
-  
-} else {
-  grid.arrange(grobs = param_plots, nrow = 2, ncol = 3)
-}
-
 # my_col_scheme <- c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#7B8A7B",
 # "#0B29D6", "#f781bf", "#999999", "black")
 
@@ -408,29 +459,107 @@ for (p in 1:param_dim) {
   # abline(0, 1, lty = 2)
 }
 
-param_names <- c("beta_1", "beta_2", "beta_3", "beta_4", "sigma_a", "sigma_e")
+param_names <- c("beta[1]", "beta[2]", "beta[3]", "beta[4]", "sigma[alpha]", "sigma[epsilon]")
 means_df <- data.frame(rvgal_mean = c(rvgal.means), hmc_mean = c(hmc.means))
 means_df$param <- rep(param_names, each = nsims)
+means_df$true_vals <- rep(true_vals, each = nsims)
+means_df$rvgal_diff <- means_df$rvgal_mean - means_df$true_vals
+means_df$hmc_diff <- means_df$hmc_mean - means_df$true_vals
 
 sds_df <- data.frame(rvgal_sd = c(rvgal.means), hmc_sd = c(hmc.means))
 sds_df$ratio <- sds_df$rvgal_sd / sds_df$hmc_sd
 sds_df$param <- rep(param_names, each = nsims)
 sds_df$sim <- rep(1:nsims, param_dim)
 
+## ggplots
+
+equal_breaks <- function(n = 3, s = 0.05, r = 0,...){ # for controlling number of axis ticks
+  function(x){
+    d <- s * diff(range(x)) / (1+2*s)
+    seq = seq(min(x)+d, max(x)-d, length=n)
+    if(seq[2]-seq[1] < 10^(-r)) seq else round(seq, r)
+  }
+}
+
 ## Plot of R-VGAL means against HMC means
-plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + geom_point() +
-  geom_abline(linetype = 2) +
+plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + 
+  geom_abline(linetype = 2, lwd = 1, col = "red") +
+  geom_point(size = 3) +
   labs(x = "HMC means", y = "R-VGAL means") +
   theme_bw() +
-  facet_wrap(~param, scales = "free")
+  facet_wrap(~param, scales = "free", labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) + 
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
 print(plot_means)
+
+if (save_plots) {
+  filename = paste0("linear_multi_sim_means_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1000, height = 600)
+  print(plot_means)
+  dev.off()
+}
 
 ## Plot of the variance ratio between R-VGAL and HMC
 plot_sds <- ggplot(sds_df, aes(x = sim, y = ratio)) + 
-  geom_point() +
-  geom_abline(slope = 0, intercept = 1, linetype = 2) +
+  geom_abline(slope = 0, intercept = 1, linetype = 2, lwd = 1, col = "red") +
+  geom_point(size = 3) +
   labs(x = "Simulation", y = "Variance ratio") +
   theme_bw() +
-  facet_wrap(~param, scales = "free")
+  facet_wrap(~param, scales = "free", labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) + 
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
 print(plot_sds)
 
+if (save_plots) {
+  filename = paste0("linear_multi_sim_sds_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1000, height = 600)
+  print(plot_sds)
+  dev.off()
+}
+
+# ## Do a plot here of R-VGAL mean - true parameter and HMC mean - true param
+# plot_means_diff <- ggplot(means_df, aes(hmc_diff, rvgal_diff)) + geom_point() +
+#   geom_abline(linetype = 2) +
+#   labs(x = "Difference between HMC mean and true parameter", 
+#        y = "Difference between R-VGAL mean and true parameter") +
+#   theme_bw() +
+#   facet_wrap(~param, scales = "free", labeller=label_parsed)
+# print(plot_means_diff)
+# 
+# # Plot differences per simulation
+# plot_means_diff3 <- ggplot(means_df, aes(rep(1:nsims, param_dim), rvgal_diff)) +
+#   geom_point(colour = "red") +
+#   geom_point(data = means_df, aes(rep(1:nsims, param_dim), hmc_diff), colour = "blue") +
+#   # geom_abline(linetype = 2) +
+#   labs(x = "Simulation",
+#        y = "Difference between R-VGAL/HMC means and true parameter") +
+#   theme_bw() +
+#   facet_wrap(~param, scales = "free", nrow = param_dim, labeller=label_parsed)
+# print(plot_means_diff3)
+
+# Plot densities of the differences
+plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) + 
+  geom_density(colour = "red", lwd = 1) +
+  geom_density(data = means_df, aes(x = hmc_diff), colour = "blue", lwd = 1) +
+  labs(x = "Differences", y = "Density") + 
+  theme_bw() +
+  # xlim(c(-0.12, 0.12)) +
+  facet_wrap(~param, ncol = param_dim, scales = "free", labeller=label_parsed) +
+  theme(strip.text.x = element_text(size = 24)) +
+  scale_x_continuous(n.breaks=4) +
+  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+print(plot_dens_diff)
+
+## Saving the plots
+if (save_plots) {
+  filename = paste0("linear_multi_sim_difference_dens_", date, ".png")
+  filepath = paste0("./multi_sims/plots/", filename)
+  
+  png(filepath, width = 1200, height = 300)
+  print(plot_dens_diff)
+  dev.off()
+} 

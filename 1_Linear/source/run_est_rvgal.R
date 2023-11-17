@@ -214,7 +214,7 @@ run_est_rvgal <- function(y, X, Z, mu_0, P_0, S = 1000L, S_alpha = 1000L,
   }
   
   rvgal.t2 <- proc.time()
-  print(rvgal.t2 - rvgal.t1)
+  # print(rvgal.t2 - rvgal.t1)
   
   ## Posterior samples
   rvgal.post_var <- solve(prec[[N+1]])

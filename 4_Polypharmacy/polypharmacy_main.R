@@ -35,14 +35,14 @@ if (length(gpus) > 0) {
   })
 }
 
-rerun_rvga <- F
-save_rvga_results <- F
-rerun_stan <- T
-save_hmc_results <- T
+rerun_rvga <- T
+save_rvga_results <- T
+rerun_stan <- F
+save_hmc_results <- F
 date <- "20230327_1" 
 use_tempering <- T
 reorder_data <- F
-save_plots <- F
+save_plots <- T
 
 if (reorder_data) {
   reorder_seed <- 2023

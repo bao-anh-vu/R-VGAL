@@ -132,7 +132,7 @@ mu_vals <- rvga_results$mu
 ##########
 ## STAN ##
 ##########
-burn_in <- 1000
+burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
 

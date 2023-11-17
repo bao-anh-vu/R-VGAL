@@ -1,4 +1,8 @@
-generate_data <- function(N, n, beta, tau, save_data = T, date) {
+generate_data <- function(N, n, beta, tau, save_data = T, seed = NULL) {
+  
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
   
   X <- list()
   p <- matrix(NA, nrow = N, ncol = n)
@@ -19,9 +23,9 @@ generate_data <- function(N, n, beta, tau, save_data = T, date) {
   
   logistic_data <- list(y = y, X = X, beta = beta, tau = tau, N = N, n = n)
   
-  if (save_data) {
-    saveRDS(logistic_data, file = paste0("logistic_data_N", N, "_n", n, "_", date, ".rds"))
-  }
+  # if (save_data) {
+  #   saveRDS(logistic_data, file = paste0("logistic_data_N", N, "_n", n, "_", date, ".rds"))
+  # }
     
   return(logistic_data)  
   

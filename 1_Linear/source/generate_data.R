@@ -1,8 +1,11 @@
-generate_data <- function(beta, sigma_a, sigma_e) {
+generate_data <- function(beta, sigma_a, sigma_e, seed = NULL) {
   ## True parameters
   # sigma_a <- 0.9
   # sigma_e <- 0.7
   # beta <- c(-1.5, 1.5, 0.5, 0.25) # runif(4, -3, 3) 
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
   
   X <- list()
   Z <- list()
