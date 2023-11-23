@@ -59,7 +59,7 @@ source("./source/compute_grad_hessian_theoretical.R")
 ## Flags
 date <- "20231018" #"20231116" #has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
-rerun_rvga <- T
+rerun_rvga <- F 
 rerun_stan <- F
 save_data <- F
 save_rvgal_results <- F

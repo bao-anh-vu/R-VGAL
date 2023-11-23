@@ -25,7 +25,7 @@ source("./source/generate_data.R")
 ## Flags
 date <- "20230329"  
 regenerate_data <- F
-rerun_rvga <- T
+rerun_rvgal <- F
 rerun_stan <- F
 save_data <- F
 save_rvga_results <- F
@@ -105,7 +105,7 @@ omega_0 <- log(0.5^2)
 mu_0 <- c(beta_0, omega_0)
 P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 
-if (rerun_rvga) {
+if (rerun_rvgal) {
   rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,
                             n_post_samples = n_post_samples,
                             use_tempering = use_tempering, 

@@ -35,14 +35,14 @@ if (length(gpus) > 0) {
   })
 }
 
-rerun_rvga <- T
-save_rvga_results <- T
+rerun_rvga <- F
+save_rvga_results <- F
 rerun_stan <- F
 save_hmc_results <- F
 date <- "20230327_1" 
 use_tempering <- T
 reorder_data <- F
-save_plots <- T
+save_plots <- F
 
 if (reorder_data) {
   reorder_seed <- 2023
@@ -352,7 +352,7 @@ if (save_plots) {
 } 
 
 ## Time benchmark
-hmc.time <- sum(colSums(get_elapsed_time(hfit)))
+hmc.time <- sum(colSums(hmc_results$time))
 rvga.time <- rvga_results$time_elapsed
 print(hmc.time)
 print(rvga.time)

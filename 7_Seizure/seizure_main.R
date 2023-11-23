@@ -19,7 +19,7 @@ source("./source/run_stan_poisson.R")
 source("./source/compute_grad_hessian_theoretical.R")
 
 ## Flags
-date <- "20231018_interact" #"20231018_interact" # has 2 fixed effects, ""20231030" has 4    
+date <- "20231018" #"20231018_interact" # has 2 fixed effects, ""20231030" has 4    
 rerun_rvga <- F
 rerun_stan <- F
 save_rvgal_results <- F
@@ -27,9 +27,9 @@ save_hmc_results <- F
 reorder_data <- F
 use_tempering <- T
 
-plot_trace <- T
+plot_trace <- F
 plot_prior <- F
-save_plots <- T
+save_plots <- F
 
 use_tensorflow <- T
 if (use_tensorflow) {

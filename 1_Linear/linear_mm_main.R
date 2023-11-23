@@ -47,7 +47,7 @@ source("./source/run_exact_rvgal.R")
 source("./source/run_stan_lmm.R")
 
 date <- "20230329"
-regenerate_data <- T
+regenerate_data <- F
 rerun_est_rvgal <- F
 rerun_exact_rvgal <- F
 rerun_hmc <- F

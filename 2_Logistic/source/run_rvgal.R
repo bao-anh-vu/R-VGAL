@@ -49,7 +49,6 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       X_i <- X[[i]]
       X_i_tf <- tf$constant(X_i, dtype = "float64")
-      #X_i_tf <- X_array_tf[i,,]        
       X_i_tf2 <- tf$reshape(X_i_tf, c(1L, n, param_dim - 1L))
       X_i_tf3 <- tf$tile(X_i_tf2, c(S_alpha, 1L, 1L))
       X_i_tf4 <- tf$reshape(X_i_tf3, c(1L, dim(X_i_tf3)))
@@ -77,7 +76,6 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       alpha_tf_3 <- tf$tile(alpha_tf_2, c(1L, 1L, n, 1L))
       
       y_tf <- tf$constant(t(outer(y[[i]], rep(1, S_alpha))), dtype = "float64")
-      #y_tf <- tf$matmul(ones_S_alpha, tf$linalg$matrix_transpose(y_array_tf[i,,]))
       y_tf2 <- tf$reshape(y_tf, c(1L, dim(y_tf), 1L))
       y_tf3 <- tf$tile(y_tf2, c(S, 1L, 1L, 1L))
       
@@ -161,12 +159,10 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       #     hess_beta_l[[s]] <- grad2_beta_vec
       #     
       #     probs <- 1/(1+exp(-X[[i]] %*% beta_l - alpha_l_s))
-      #     browser()
       #     # 
       #     # grad2_beta_vec <- probs * (1-probs)
       #   }
       #   hess_beta[[l]] <- hess_beta_l
-      #   browser()
       # }
       # 
       ####################
@@ -203,8 +199,7 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       E_score_tf <- tf$math$reduce_mean(score_all_tf, 0L)
       E_hessian_tf <- tf$math$reduce_mean(Hessian_all_tf, 0L)
-      # cat("a =", a, "\n")
-      browser()
+
       prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
       mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))       
       
