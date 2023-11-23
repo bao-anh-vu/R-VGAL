@@ -1,4 +1,4 @@
-setwd("~/R-VGAL/7_Seizure")
+setwd("~/R-VGAL/7_Epilepsy")
 
 rm(list=ls())
 
@@ -167,7 +167,7 @@ if (reorder_data) {
   reorder_info <- ""
 }
 result_directory <- paste0("./results/")
-results_file <- paste0("seizure_rvgal", temper_info, reorder_info, 
+results_file <- paste0("epilepsy_rvgal", temper_info, reorder_info, 
                        "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, ".rds")
 
 
@@ -225,11 +225,11 @@ if (rerun_stan) {
                            prior_var = P_0)
   
   if (save_hmc_results) {
-    saveRDS(hmc_results, file = paste0(result_directory, "seizure_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0(result_directory, "epilepsy_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
   }
   
 } else {
-  hmc_results <- readRDS(file = paste0(result_directory, "seizure_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
+  hmc_results <- readRDS(file = paste0(result_directory, "epilepsy_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
   
 }
 
@@ -372,7 +372,7 @@ grid.newpage()
 grid.draw(gp)
 
 if (save_plots) {
-  plot_file <- paste0("seizure_posterior", temper_info, reorder_info,
+  plot_file <- paste0("epilepsy_posterior", temper_info, reorder_info,
                       "_S", S, "_Sa", S_alpha, "_", date, ".png")
   filepath = paste0("./plots/", plot_file)
   png(filepath, width = 1000, height = 700)
