@@ -204,6 +204,7 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
       E_score_tf <- tf$math$reduce_mean(score_all_tf, 0L)
       E_hessian_tf <- tf$math$reduce_mean(Hessian_all_tf, 0L)
       # cat("a =", a, "\n")
+      browser()
       prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
       mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))       
       

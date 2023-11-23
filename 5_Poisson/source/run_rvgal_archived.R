@@ -2,6 +2,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
                       use_tempering = T, n_temper = 10, 
                       temper_schedule = rep(0.25, 4),
                       n_post_samples = 10000,
+                      use_tf = T,
                       save_results = F) {
   
   tf64 <- function(x) tf$constant(x, dtype = "float64")
@@ -32,9 +33,8 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
     cat("i = ", i, "\n")
     
     # if (S >= 500 && S_alpha >= 500) {
-      gc()
+    gc()
     # }
-    
     a_vals <- 1 # for tempering
     if (use_tempering) {
       if (i <= n_temper) { # only temper the first n_temper observations
@@ -54,6 +54,15 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       
       samples_list <- lapply(1:S, function(r) samples[r, -(1:n_fixed_effects)])
       
+      log_likelihood <- list()
+      grads <- list()
+      hessians <- list()
+      
+      y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
+      X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
+      Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
+      
+      ####### Development ###########
       beta_all <- samples[, 1:n_fixed_effects]
       
       Sigma_alpha_all <- lapply(samples_list, construct_Sigma,
@@ -67,203 +76,244 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
                             function(Sigma) rmvnorm(S_alpha, rep(0, n_random_effects), Sigma))
       } 
       
-      log_likelihood <- list()
-      grads <- list()
-      hessians <- list()
+      ########### TF ###########
       
-      y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
-      X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
-      Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
-      
-      alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
-      theta_tf <- tf$Variable(samples, dtype = "float64")
-      
-      # # #
-      tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf,
-                                      alpha_all_tf, theta_tf, S_alpha)
-      tf_grad <- tf_out$grad
-      tf_hessian <- tf_out$hessian
-      
-      tf_grad_beta <- tf_grad[,, 1:n_fixed_effects]
-      tf_grad_zeta <- tf_grad[,, (n_fixed_effects+1):param_dim]
-      # 
-      # browser()
-      # # ##
-      ############# Theoretical gradient ############
-      prior_var_beta <- diag(P_0)[1:n_fixed_effects]
-
-      I_d <- diag(n_random_effects)
-
-      log_likelihood <- list()
-      llh_test <- list()
-      grad_beta <- list()
-      grad_zeta <- list()
-      grad_joint <- list()
-      hess_joint <- list()
-
-      for (l in 1:S) {
-        theta_l <- samples[l, ]
-
-        beta_l <- theta_l[1:n_fixed_effects]
-
-        Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
-                                         d = n_random_effects)
-        alpha_l <- alpha_all[[l]]
-
-        llh_tan <- list() # log likelihood from Tan and Nott
-        llh_y_tan <- list() # log likelihood from Tan and Nott
-        llh_alpha_tan <- list() # log likelihood from Tan and Nott
+      if (use_tf) {
         
-        grad_beta_l <- list()
-        grad_zeta_l <- list()
-        grad_joint_l <- list()
-        hess_beta_l <- list()
-        hess_zeta_l <- list()
-        hess_joint_l <- list()
-
-        W <- t(chol(Sigma_alpha_l))
-        W_inv <- solve(W)
-
-        for (s in 1:S_alpha) {
-
-          if (n_random_effects == 1) {
-            alpha_l_s <- alpha_l[s]
-          } else {
-            alpha_l_s <- alpha_l[s, ]
-          }
-
-          ## Log likelihood from Tan and Nott -- to compare with TF llh
-          llh_y_tan[[s]] <- y[[i]] %*% (X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s) -
-            sum(exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) - sum(log(factorial(y[[i]])))
-          llh_alpha_tan[[s]] <- - 1/2 * n_random_effects * log(2*pi) - sum(log(diag(W))) - 1/2 * t(alpha_l_s) %*% t(W_inv) %*% W_inv %*% alpha_l_s
-          llh_tan[[s]] <- llh_y_tan[[s]] + llh_alpha_tan[[s]]
-
-          ## Gradients of p(y_i, alpha_i^(s) | beta, zeta^(s)) from Tan and Nott
-          grad_beta_l[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
-
-          ##
-          I_zeta <- W #diag(alpha_l_s)
-          I_zeta[lower.tri(I_zeta)] <- 1
-
-          A <- t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
-
-          grad_zeta_l[[s]] <- - I_d[lower.tri(I_d, diag = T)] +
-            I_zeta[lower.tri(I_zeta, diag = T)] * A[lower.tri(A, diag = T)]
-
-          grad_joint_l[[s]] <- c(grad_beta_l[[s]], grad_zeta_l[[s]])
-
-          grad_p_L <- - t(W_inv) + W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv) %*% W_inv
-
-          ind_df <- data.frame(r = c(1,2,2), c = c(1,1,2))
-          grad_zeta_test <- matrix(0, n_random_effects, n_random_effects)
-          grad_L_zeta_list <- list()
-          grad2_L_zeta_list <- list()
-
-          for (row in 1:nrow(ind_df)) {
-            i <- ind_df[row, 1]
-            j <- ind_df[row, 2]
-            grad_L_zeta_ij <- matrix(0, nrow = n_random_effects, ncol = n_random_effects) # since the diagonals of W are exp(zeta_ii)
-            grad2_L_zeta_ij <- matrix(0, nrow = n_random_effects, ncol = n_random_effects) # since the diagonals of W are exp(zeta_ii)
-
-            if (i == j) {
-              grad_L_zeta_ij[i,j] <- W[i,j]
-              grad2_L_zeta_ij[i,j] <- W[i,j]
+        alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
+        theta_tf <- tf$Variable(samples, dtype = "float64")
+        # 
+        # # # #
+        tf_out <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
+                                        alpha_all_tf, theta_tf, S_alpha)
+        # # 
+        # tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
+        #                                 alpha_all_tf, theta_tf, S_alpha)
+        
+        # browser()
+        E_score_tf <- tf$math$reduce_mean(tf_out$grad, 0L)
+        E_hessian_tf <- tf$math$reduce_mean(tf_out$hessian, 0L)
+        prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
+        mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))
+        
+      } else {
+        ############# Theoretical gradient ############
+        prior_var_beta <- diag(P_0)[1:n_fixed_effects]
+        
+        I_d <- diag(n_random_effects)
+        
+        log_likelihood <- list()
+        log_likelihood_y <- list()
+        log_likelihood_alpha <- list()
+        
+        llh_test <- list()
+        grad_beta <- list()
+        grad_zeta <- list()
+        grad_joint <- list()
+        hess_joint <- list()
+        grad_is <- list()
+        hess_is <- list()
+        for (l in 1:S) {
+          theta_l <- samples[l, ]
+          
+          beta_l <- theta_l[1:n_fixed_effects]
+          
+          Sigma_alpha_l <- construct_Sigma(theta_l[-(1:n_fixed_effects)],
+                                           d = n_random_effects)
+          alpha_l <- alpha_all[[l]]
+          
+          llh_tan <- list() # log likelihood from Tan and Nott
+          llh_y_tan <- list()
+          llh_alpha_tan <- list()
+          
+          log_weights <- c()
+          grad_beta_l <- list()
+          grad_zeta_l <- list()
+          grad_joint_l <- list()
+          hess_beta_l <- list()
+          hess_zeta_l <- list()
+          hess_joint_l <- list()
+          
+          L <- t(chol(Sigma_alpha_l))
+          L_inv <- solve(L)
+          
+          for (s in 1:S_alpha) {
+            
+            if (n_random_effects == 1) {
+              alpha_l_s <- alpha_l[s]
             } else {
-              grad_L_zeta_ij[i,j] <- 1
+              alpha_l_s <- alpha_l[s, ]
             }
-            grad_L_zeta_list[[row]] <- grad_L_zeta_ij
-            grad2_L_zeta_list[[row]] <- grad2_L_zeta_ij
-
-            grad_zeta_test[i,j] <- sum(diag(t(grad_p_L) %*% grad_L_zeta_ij))
+            
+            ## Log likelihood from Tan and Nott -- to compare with TF llh
+            llh_y_tan[[s]] <- y[[i]] %*% (X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s) -
+              sum(exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) - sum(lfactorial(y[[i]]))
+            llh_alpha_tan[[s]] <- - 1/2 * n_random_effects * log(2*pi) - sum(log(diag(L))) - 1/2 * t(alpha_l_s) %*% t(L_inv) %*% L_inv %*% alpha_l_s
+            llh_tan[[s]] <- llh_y_tan[[s]] + llh_alpha_tan[[s]]
+            log_weights[s] <- llh_y_tan[[s]]
+            
+            ## Gradients of p(y_i, alpha_i^(s) | beta, zeta^(s)) from Tan and Nott
+            grad_beta_l[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
+            
+            # ## gradient of zeta from Tan and Nott
+            # I_zeta <- L #diag(alpha_l_s)
+            # I_zeta[lower.tri(I_zeta)] <- 1
+            #
+            # A <- t(L_inv) %*% L_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(L_inv)
+            #
+            # grad_zeta_tan <- - I_d[lower.tri(I_d, diag = T)] +
+            #   I_zeta[lower.tri(I_zeta, diag = T)] * A[lower.tri(A, diag = T)]
+            
+            
+            ## My own derivations
+            ind_df <- data.frame(r = c(1,2,2), c = c(1,2,1))
+            grad_zeta_test <- matrix(0, n_random_effects, n_random_effects)
+            grad_L_zeta_list <- list()
+            grad2_L_zeta_list <- list()
+            
+            grad_p_L <- - t(L_inv) + t(L_inv) %*% L_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(L_inv)
+            
+            for (row in 1:nrow(ind_df)) {
+              j <- ind_df[row, 1]
+              k <- ind_df[row, 2]
+              grad_L_zeta_jk <- matrix(0, nrow = n_random_effects, ncol = n_random_effects) # since the diagonals of L are exp(zeta_ii)
+              grad2_L_zeta_jk <- matrix(0, nrow = n_random_effects, ncol = n_random_effects) # since the diagonals of L are exp(zeta_ii)
+              
+              if (j == k) {
+                grad_L_zeta_jk[j,k] <- L[j,k]
+                grad2_L_zeta_jk[j,k] <- L[j,k]
+              } else {
+                grad_L_zeta_jk[j,k] <- 1
+              }
+              grad_L_zeta_list[[row]] <- grad_L_zeta_jk
+              grad2_L_zeta_list[[row]] <- grad2_L_zeta_jk
+              
+              grad_zeta_test[j,k] <- sum(diag(t(grad_p_L) %*% grad_L_zeta_jk))
+            }
+            grad_zeta_l[[s]] <- c(diag(grad_zeta_test), grad_zeta_test[lower.tri(grad_zeta_test)])
+            
+            grad_joint_l[[s]] <- c(grad_beta_l[[s]], grad_zeta_l[[s]])
+            
+            ## Hessian of beta
+            hess_beta_l[[s]] <- - t(X[[i]]) %*% diag(as.vector(exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s))) %*% X[[i]]
+            
+            ## Hessian of zeta
+            grad2_zeta <- c()
+            Amat <- - t(L_inv) + t(L_inv) %*% L_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(L_inv)
+            Bmat <- L_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(L_inv)
+            grad_Linv_zeta_list <- list()
+            grad_A_zeta_list <- list()
+            grad_B_zeta_list <- list()
+            
+            ## the diagonal entries
+            for (row in 1:nrow(ind_df)) {
+              j <- ind_df[row, 1]
+              k <- ind_df[row, 2]
+              grad_Linv_zeta_jk <- matrix(0, n_random_effects, n_random_effects)
+              if (j == k) {
+                grad_Linv_zeta_jk[j,k] <- -L_inv[j,k]
+                grad_Linv_zeta_jk[2,1] <- L[2,1]/(L[1,1] * L[2,2])
+              } else {
+                grad_Linv_zeta_jk[2,1] <- -1/(L[1,1] * L[2,2])
+              }
+              grad_Linv_zeta_list[[row]] <- grad_Linv_zeta_jk
+              grad_B_zeta_jk <- grad_Linv_zeta_jk %*% tcrossprod(alpha_l_s) %*% t(L_inv) +
+                L_inv %*% tcrossprod(alpha_l_s) %*% t(grad_Linv_zeta_jk)
+              
+              grad_A_zeta_jk <- - t(grad_Linv_zeta_jk) + t(grad_Linv_zeta_jk) %*% Bmat +
+                t(L_inv) %*% grad_B_zeta_jk
+              
+              grad2_zeta_jk <- sum(diag(t(grad_A_zeta_jk) %*% grad_L_zeta_list[[row]] +
+                                          t(Amat) %*% grad2_L_zeta_list[[row]]))
+              grad2_zeta[row] <- grad2_zeta_jk
+              
+              grad_A_zeta_list[[row]] <- grad_A_zeta_jk
+              grad_B_zeta_list[[row]] <- grad_B_zeta_jk
+              
+            }
+            
+            ## Now the cross entries
+            grad_A_zeta_11 <- grad_A_zeta_list[[1]]
+            grad_A_zeta_22 <- grad_A_zeta_list[[2]]
+            grad_A_zeta_21 <- grad_A_zeta_list[[3]]
+            
+            grad_L_zeta_11 <- grad_L_zeta_list[[1]]
+            grad_L_zeta_22 <- grad_L_zeta_list[[2]]
+            grad_L_zeta_21 <- grad_L_zeta_list[[3]]
+            
+            grad2_zeta_22_11 <- sum(diag(t(grad_A_zeta_22) %*% grad_L_zeta_11))
+            grad2_zeta_21_11 <- sum(diag(t(grad_A_zeta_21) %*% grad_L_zeta_11))
+            grad2_zeta_21_22 <- sum(diag(t(grad_A_zeta_21) %*% grad_L_zeta_22))
+            
+            grad2_zeta_mat <- diag(grad2_zeta)
+            grad2_zeta_mat[2,1] <- grad2_zeta_22_11
+            grad2_zeta_mat[3,1] <- grad2_zeta_21_11
+            grad2_zeta_mat[3,2] <- grad2_zeta_21_22
+            grad2_zeta_mat[upper.tri(grad2_zeta_mat)] = t(grad2_zeta_mat[lower.tri(grad2_zeta_mat)])
+            
+            hess_zeta_l[[s]] <- grad2_zeta_mat
+            hess_joint_l[[s]] <- bdiag(hess_beta_l[[s]], hess_zeta_l[[s]])
+            
           }
-          grad_zeta_test2 <- c(diag(grad_zeta_test), grad_zeta_test[lower.tri(grad_zeta_test)])
-
-          grad_L_zeta <- W
-          grad_L_zeta[lower.tri(grad_L_zeta)] <- 1
-          test <- grad_p_L * grad_L_zeta
-          grad_zeta_test3 <- c(diag(test), test[lower.tri(test)])
-
-          # ## Now Hessian
-          # # grad2_beta <- list()
-          # # for (j in 1:n) { # vectorise later
-          # #   grad2_beta[[j]] <- as.numeric(- exp(X[[i]][j, ] %*% beta_l + Z[[i]][j, ] %*% alpha_l_s)) * tcrossprod(X[[i]][j, ])
-          # # }
-          # # hess_beta_l[[s]] <- Reduce("+", grad2_beta)
-          # grad2_beta_vec <- - t(X[[i]]) %*% diag(as.vector(exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s))) %*% X[[i]]
-          # 
-          # # hess_joint_l[[s]] <- grad2_beta_vec #hess_beta_l[[s]]
-          # #
-          # # ## Hessian of zeta
-          # grad2_zeta <- list()
-          # Amat <- - t(W_inv) + t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
-          # grad_Linv_zeta_list <- list()
-          # 
-          # for (row in 1:nrow(ind_df)) {
-          #   i <- ind_df[row, 1]
-          #   j <- ind_df[row, 2]
-          #   grad_Linv_zeta_ij <- matrix(0, n_random_effects, n_random_effects)
-          #   if (i == j) {
-          #     grad_Linv_zeta_ij[i, j] <- -W_inv[i,j]
-          #     grad_Linv_zeta_ij[1,2] <- W[2,1]/(W[1,1] * W[2,2])
-          #   } else {
-          #     grad_Linv_zeta_ij[1,2] <- -1/(W[1,1] * W[2,2])
-          #   }
-          # 
-          #   grad_Linv_zeta_list[[row]] <- grad_Linv_zeta_ij
-          # 
-          # 
-          #   grad_A_zeta_ij <- - t(grad_Linv_zeta_ij) + grad_Linv_zeta_ij %*% tcrossprod(alpha_l_s) %*% t(W_inv) +
-          #     W_inv %*% tcrossprod(alpha_l_s) %*% t(grad_Linv_zeta_ij)
-          # 
-          #   grad2_zeta_ij <- sum(diag(t(grad_A_zeta_ij) %*% grad_L_zeta_list[[row]] +
-          #                               t(Amat) %*% grad2_L_zeta_list[[row]]))
-          #   grad2_zeta[[row]] <- grad2_zeta_ij
-          # }
-          # 
-          # #### Deprecated ####
-          # # ## Hessian of zeta
-          # # Amat <- - t(W_inv) + t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv)
-          # # grad_A_L <- t(W_inv) %*% t(W_inv) - (t(W_inv) %*% t(W_inv) %*% W_inv + t(W_inv) %*% W_inv %*% W_inv) %*%
-          # #   alpha_l_s %*% t(alpha_l_s) %*% t(W_inv) - t(W_inv) %*% W_inv %*% alpha_l_s %*% t(alpha_l_s) %*% t(W_inv) %*% t(W_inv)
-          # #
-          # # grad2_zeta <- list()
-          # # for (row in 1:nrow(ind_df)) {
-          # #   browser()
-          # #   grad_A_zeta_ij <- grad_A_L %*% grad_L_zeta_list[[row]]
-          # #   grad2_zeta[[row]] <- sum(diag(t(grad_A_zeta_ij) %*% grad_L_zeta_list[[row]] +
-          # #                                   t(Amat) %*% grad2_L_zeta_list[[row]]))
-          # # }
-          # #### Deprecated ####
+          
+          ## likelihood seems ok -- same between TF and for loop
+          log_likelihood[[l]] <- unlist(llh_tan)
+          log_likelihood_y[[l]] <- unlist(llh_y_tan)
+          log_likelihood_alpha[[l]] <- unlist(llh_alpha_tan)
+          
+          # grad_beta[[l]] <- grad_beta_l
+          # grad_zeta[[l]] <- grad_zeta_l
+          #
+          grad_joint[[l]] <- grad_joint_l
+          hess_joint[[l]] <- hess_joint_l
+          # test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
+          #                                  alpha_l, theta_l, S_alpha)
+          # llh_test[[l]] <- test$llh
+          # llh_test_y <- test$llh_y
+          # llh_test_alpha <- test$llh_alpha
+          
+          ## Now importance sampling
+          max_weights <- max(log_weights)
+          log_w_shifted <- log_weights - max_weights
+          norm_weights <- as.list(exp(log_w_shifted) / sum(exp(log_w_shifted)))
+          weighted_grad <- Map("*", norm_weights, grad_joint_l)
+          grad_is[[l]] <- Reduce("+", weighted_grad)
+          
+          hess_part1 <- tcrossprod(grad_is[[l]])
+          joint_grad_crossprod <- lapply(grad_joint_l, "tcrossprod")
+          unweighted_hess <- Map("+", joint_grad_crossprod, hess_joint_l)
+          weighted_hess <- Map("*", norm_weights, unweighted_hess)
+          hess_part2 <- Reduce("+", weighted_hess)
+          
+          hess_is[[l]] <- as.matrix(hess_part2) - hess_part1
+          
         }
-
-        ## likelihood seems ok -- same between TF and for loop
-        log_likelihood[[l]] <- unlist(llh_tan)
-        grad_beta[[l]] <- grad_beta_l
-        grad_zeta[[l]] <- grad_zeta_l
-
-        grad_joint[[l]] <- grad_joint_l
-        hess_joint[[l]] <- hess_joint_l
         
-        test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
-                                         alpha_l, theta_l, S_alpha)
-        llh_test[[l]] <- test$llh
-        llh_test_y <- test$llh_y
-        llh_test_alpha <- test$llh_alpha
-        browser()
+        E_score_tf2 <- Reduce("+", grad_is)/length(grad_is)
+        E_hessian_tf2 <- Reduce("+", hess_is)/length(grad_is)
+        
+        prec_temp <- prec_temp - a * as.matrix(E_hessian_tf2)
+        mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf2))
       }
+      
       ############ TF #############
       
-      tf_out2 <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
-                                     alpha_all_tf, theta_tf, S_alpha)
-      
-      E_score_tf <- tf$math$reduce_mean(tf_out2$grad, 0L)
-      E_hessian_tf <- tf$math$reduce_mean(tf_out2$hessian, 0L)
-      prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
-      mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))
       # 
+      # tf_grad_beta <- tf_grad[,, 1:n_fixed_effects]
+      # tf_grad_zeta <- tf_grad[,, (n_fixed_effects+1):param_dim]
+      # 
+      # tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf,
+      #                                 alpha_all_tf, theta_tf, S_alpha)
+      # tf_grad <- tf_out$grad
+      # tf_hessian <- tf_out$hessian
+      # tf_hessian <- tf_out$hessian
+      # browser()
+      
+      #### TF ####
+      
       ###### end dev ###############
       ## Check against gradient from Tan and Nott
-            
+      
       
       #   
       #   # Now we need a for loop from s = 1, ..., S_alpha
@@ -306,7 +356,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       #   # # log_weights_tf <- tf_out$log_weights
       #   # weights <- as.list(tf_out$weights)
       #   # 
-        ############ Test with the usual for loop ##############
+      ############ Test with the usual for loop ##############
       #   test <- poisson_joint_likelihood(y[[i]], X[[i]], Z[[i]],
       #                                              alpha_i, theta_l, S_alpha)
       #   log_likelihood <- test$llh
@@ -316,7 +366,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       #   llh_y_i_s <- dpois(y_i, lambda_i, log = T)
       #   llh_y_i_s <- sum(llh_y_i_s)
       # 
-      #   ## Weights for importance sampling
+      #   ## Leights for importance sampling
       #   log_weights <- c()
       #   for (s in 1:S_alpha) { # parallelise later
       #     lambda_i_s <- exp(X[[i]] %*% beta + Z[[i]] %*% alpha_i[, s])
@@ -378,7 +428,16 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   post_var <- chol2inv(chol(prec[[N+1]]))
   rvgal.post_samples <- rmvnorm(n_post_samples, mu_vals[[N+1]], post_var)  
   
-  # rvgal.post_samples_beta <- rvgal.post_samples[, 1:n_fixed_effects]
+  post_samples_list <- lapply(1:n_post_samples, function(r) rvgal.post_samples[r, -(1:n_fixed_effects)])
+  post_samples_Sigma <- lapply(post_samples_list, construct_Sigma,
+                               d = n_random_effects)
+  
+  nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
+  lower_ind <- lapply(1:nlower, index_to_i_j_rowwise_diag)
+  for (d in 1:(param_dim - n_fixed_effects)) {
+    inds <- lower_ind[[d]]
+    rvgal.post_samples[, n_fixed_effects+d] <- unlist(lapply(post_samples_Sigma, function(Sigma) Sigma[inds[1], inds[2]]))
+  }
   
   rvgal_results <- list(mu = mu_vals,
                         prec = prec,

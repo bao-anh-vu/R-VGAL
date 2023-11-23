@@ -32,9 +32,9 @@ if (length(gpus) > 0) {
       gpus[[1]],
       list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=2*4096))
     )
-
+    
     logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
-
+    
     print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
   }, error = function(e) {
     # Virtual devices must be set before GPUs have been initialized
@@ -53,7 +53,7 @@ source("./source/run_multi_sims_hmc.R")
 ## Flags
 date <- "20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
-rerun_rvgal_sims <- F
+rerun_rvgal_sims <- T
 rerun_hmc_sims <- F
 save_datasets <- F
 save_rvgal_sim_results <- F
@@ -118,7 +118,7 @@ if (regenerate_data) {
 } else {
   for (sim in 1:nsims) {
     datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/poisson_data_N", N, "_n", n, "_", date, "_",
-                                      formatC(sim, width=3, flag="0"), ".rds"))
+                                             formatC(sim, width=3, flag="0"), ".rds"))
   }
 }
 
@@ -148,7 +148,7 @@ rvgal_sim_results <- list()
 error_inds <- c()
 
 print("Starting R-VGAL simulations...")
-for (sim in 25:50) {
+for (sim in 1:2) {
   
   skip_to_next <- FALSE
   
@@ -158,61 +158,61 @@ for (sim in 25:50) {
   
   if (rerun_rvgal_sims) {
     
-      cat("Sim", sim, "in progress... \n")
+    cat("Sim", sim, "in progress... \n")
+    
+    poisson_data <- datasets[[sim]]
+    
+    y <- poisson_data$y
+    X <- poisson_data$X
+    Z <- poisson_data$Z
+    
+    beta <- poisson_data$beta
+    Sigma_alpha <- poisson_data$Sigma_alpha
+    
+    ## Reorder data if needed
+    if (reorder_data) {
+      set.seed(reorder_seed) 
+      reordered_ind <- sample(1:length(y))
+      print(head(reordered_ind))
+      reordered_y <- lapply(reordered_ind, function(i) y[[i]])
+      reordered_X <- lapply(reordered_ind, function(i) X[[i]])
       
-      poisson_data <- datasets[[sim]]
-      
-      y <- poisson_data$y
-      X <- poisson_data$X
-      Z <- poisson_data$Z
-      
-      beta <- poisson_data$beta
-      Sigma_alpha <- poisson_data$Sigma_alpha
-      
-      ## Reorder data if needed
-      if (reorder_data) {
-        set.seed(reorder_seed) 
-        reordered_ind <- sample(1:length(y))
-        print(head(reordered_ind))
-        reordered_y <- lapply(reordered_ind, function(i) y[[i]])
-        reordered_X <- lapply(reordered_ind, function(i) X[[i]])
+      y <- reordered_y
+      X <- reordered_X
+    }
+    
+    ## Initialise variational parameters
+    n_fixed_effects <- as.integer(ncol(X[[1]]))
+    n_random_effects <- as.integer(ncol(Z[[1]]))
+    n_elements_L <- n_random_effects + n_random_effects * (n_random_effects - 1)/2
+    param_dim <- n_fixed_effects + n_elements_L
+    
+    beta_0 <- rep(0, n_fixed_effects)
+    l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
+    mu_0 <- c(beta_0, l_vec_0)
+    P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
+    
+    
+    tryCatch( 
+      expr = {
+        rvgal_sim_results[[sim]] <- run_rvgal(y, X, Z, mu_0, P_0, 
+                                              S = S, S_alpha = S_alpha,
+                                              n_post_samples = n_post_samples,
+                                              use_tempering = use_tempering, 
+                                              n_temper = n_obs_to_temper, 
+                                              temper_schedule = a_vals_temper,
+                                              use_tf = T)
         
-        y <- reordered_y
-        X <- reordered_X
-      }
-      
-      ## Initialise variational parameters
-      n_fixed_effects <- as.integer(ncol(X[[1]]))
-      n_random_effects <- as.integer(ncol(Z[[1]]))
-      n_elements_L <- n_random_effects + n_random_effects * (n_random_effects - 1)/2
-      param_dim <- n_fixed_effects + n_elements_L
-      
-      beta_0 <- rep(0, n_fixed_effects)
-      l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
-      mu_0 <- c(beta_0, l_vec_0)
-      P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
-      
-      
-      tryCatch( 
-        expr = {
-          rvgal_sim_results[[sim]] <- run_rvgal(y, X, Z, mu_0, P_0, 
-                                                       S = S, S_alpha = S_alpha,
-                                                       n_post_samples = n_post_samples,
-                                                       use_tempering = use_tempering, 
-                                                       n_temper = n_obs_to_temper, 
-                                                       temper_schedule = a_vals_temper,
-                                                       use_tf = T)
-                 
-         if (save_rvgal_sim_results) {
-           saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
-         }
-        }, 
-       error = function(e) { error_inds = sim; skip_to_next <<- TRUE})
-      
-      if(skip_to_next) { next }  
-      
+        if (save_rvgal_sim_results) {
+          saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
+        }
+      }, 
+      error = function(e) { error_inds = sim; skip_to_next <<- TRUE})
+    
+    if(skip_to_next) { next }  
+    
   } else {
-      rvgal_sim_results[[sim]] <- readRDS(file = paste0(result_directory, rvgal.result_file))
+    rvgal_sim_results[[sim]] <- readRDS(file = paste0(result_directory, rvgal.result_file))
   }
 }
 
@@ -233,7 +233,7 @@ if (rerun_hmc_sims) {
   #        burn_in = burn_in) #, mc.cores = 10L)
   
 } 
-  
+
 for (sim in 1:nsims) {
   hmc.result_file <- paste0(result_directory, 
                             "poisson_hmc_N", N, "_n", n, "_", date, "_",
@@ -241,7 +241,7 @@ for (sim in 1:nsims) {
   
   hmc_sim_results[[sim]] <- readRDS(file = hmc.result_file)
 }
-  
+
 # }
 
 ## R-VGA results
@@ -393,7 +393,7 @@ plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) +
 print(plot_dens_diff)
 
 if (save_plots) {
-  filename = paste0("logistic_multi_sim_difference_dens_", date, ".png")
+  filename = paste0("poisson_multi_sim_difference_dens_", date, ".png")
   filepath = paste0("./multi_sims/plots/", filename)
   
   png(filepath, width = 1200, height = 300)

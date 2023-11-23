@@ -25,7 +25,7 @@ source("./source/generate_data.R")
 ## Flags
 date <- "20230329"  
 regenerate_data <- F
-rerun_rvga <- F
+rerun_rvga <- T
 rerun_stan <- F
 save_data <- F
 save_rvga_results <- F

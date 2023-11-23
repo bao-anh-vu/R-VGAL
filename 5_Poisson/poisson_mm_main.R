@@ -1,4 +1,4 @@
-setwd("/home/babv971/R-VGAL/5_Poisson/")
+setwd("~/R-VGAL/5_Poisson/")
 ## Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
@@ -7,11 +7,36 @@ setwd("/home/babv971/R-VGAL/5_Poisson/")
 
 rm(list=ls())
 
-# reticulate::use_condaenv("tf2.11", required = TRUE)
-library("tensorflow")
-tfp <- import("tensorflow_probability")
-tfd <- tfp$distributions
-library(keras)
+use_tensorflow <- T
+
+if (use_tensorflow) {
+  library("tensorflow")
+  tfp <- import("tensorflow_probability")
+  tfd <- tfp$distributions
+  library(keras)
+  
+  # List physical devices
+  gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+  if (length(gpus) > 0) {
+    tryCatch({
+      # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
+      tf$config$experimental$set_virtual_device_configuration(
+        gpus[[1]],
+        list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
+      )
+
+      logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+
+      print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+    }, error = function(e) {
+      # Virtual devices must be set before GPUs have been initialized
+      print(e)
+    })
+  }
+  
+}
+
 library("dplyr")
 library("mvtnorm")
 library("rstan")
@@ -22,38 +47,17 @@ library(Matrix)
 library(coda)
 library(matrixcalc)
 
-# List physical devices
-gpus <- tf$config$experimental$list_physical_devices('GPU')
-
-if (length(gpus) > 0) {
-  tryCatch({
-    # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
-    tf$config$experimental$set_virtual_device_configuration(
-      gpus[[1]],
-      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=2*4096))
-    )
-    
-    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
-    
-    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
-  }, error = function(e) {
-    # Virtual devices must be set before GPUs have been initialized
-    print(e)
-  })
-}
-# tfp <- import("tensorflow_probability")
-# tfd <- tfp$distributions
 
 source("./source/run_rvgal.R")
 source("./source/run_stan_poisson.R")
 source("./source/generate_data.R")
 source("./source/generate_data2.R")
 # source("./source/compute_joint_llh_tf.R")
-# source("./source/compute_grad_hessian_all.R")
+source("./source/compute_grad_hessian_all.R")
 source("./source/compute_grad_hessian_theoretical.R")
 
 ## Flags
-date <-"20231018" #  "20231116" #has 2 fixed effects, ""20231030" has 4    
+date <- "20231018" #"20231116" #has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
 rerun_rvga <- T
 rerun_stan <- F
@@ -61,7 +65,7 @@ save_data <- F
 save_rvgal_results <- F
 save_hmc_results <- F
 plot_prior <- F
-save_plots <- T
+save_plots <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -69,7 +73,7 @@ plot_trace <- F
 
 if (use_tempering) {
   n_obs_to_temper <- 10
-  K <- 10
+  K <- 4
   a_vals_temper <- rep(1/K, K)
 }
 
@@ -85,7 +89,7 @@ beta <- 0
 Sigma_alpha <- 0
 if (date == "20231116") {
   beta <- c(6.56, -0.23, 0.58)
-  Sigma_alpha <- matrix(c(0.54, -0.013, -0.013, 0.01), 2, 2)
+  Sigma_alpha <- matrix(c(0.856959673, -0.008146311, -0.008146311, 0.005272048), 2, 2)
 } else {
   beta <- c(-0.5, 1.25) 
   nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
@@ -105,8 +109,8 @@ if (date == "20231116") {
 if (regenerate_data) {
   if (date == "20231116") {
     poisson_data <- generate_data2(N = N, n = n, beta = beta, 
-                                  Sigma_alpha = Sigma_alpha,
-                                  seed = 2023)
+                                   Sigma_alpha = Sigma_alpha,
+                                   seed = 2023)
   } else {
     poisson_data <- generate_data(N = N, n = n, beta = beta, 
                                   Sigma_alpha = Sigma_alpha,
@@ -142,6 +146,7 @@ if (reorder_data) {
 }
 
 hist(unlist(y))
+
 ###################
 ##     R-VGA     ##
 ###################
@@ -231,7 +236,7 @@ if (rerun_rvga) {
                              use_tempering = use_tempering, 
                              n_temper = n_obs_to_temper, 
                              temper_schedule = a_vals_temper,
-                             use_tf = T)
+                             use_tf = use_tensorflow)
   
   if (save_rvgal_results) {
     saveRDS(rvgal_results, file = paste0(result_directory, results_file))
@@ -272,12 +277,12 @@ if (rerun_stan) {
   Z_long <- do.call("rbind", Z)
   
   hmc_results <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
-                           n_chains = n_chains, data = y_long,
-                           grouping = rep(1:N, each = n), n_groups = N,
-                           fixed_covariates = X_long,
-                           rand_covariates = Z_long,
-                           prior_mean = mu_0,
-                           prior_var = P_0)
+                                  n_chains = n_chains, data = y_long,
+                                  grouping = rep(1:N, each = n), n_groups = N,
+                                  fixed_covariates = X_long,
+                                  rand_covariates = Z_long,
+                                  prior_mean = mu_0,
+                                  prior_var = P_0)
   
   if (save_hmc_results) {
     saveRDS(hmc_results, file = paste0(result_directory, "poisson_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
@@ -443,7 +448,7 @@ if (plot_trace) {
     # if (p > n_fixed_effects && p <= (n_fixed_effects + n_random_effects)) {
     #   trajectories[[p]] <- sapply(1:N, function(x) exp(rvgal_results$mu[[x]][p])^2)
     # } else {
-      trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
+    trajectories[[p]] <- sapply(1:N, function(x) rvgal_results$mu[[x]][p])
     # }
     plot(trajectories[[p]], main = param_names[p], type = "l")
     abline(h = true_vals[p], lty = 2, col = "red")

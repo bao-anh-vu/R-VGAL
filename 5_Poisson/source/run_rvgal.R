@@ -5,7 +5,6 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
                       use_tf = T,
                       save_results = F) {
   
-  tf64 <- function(x) tf$constant(x, dtype = "float64")
   
   if (!use_tempering) {
     temper_schedule <- 1
@@ -39,7 +38,11 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
     a_vals <- 1 # for tempering
     if (use_tempering) {
       if (i <= n_temper) { # only temper the first n_temper observations
-        a_vals <- temper_schedule
+        # a_vals <- temper_schedule
+        Kseq <- round(seq(K, 1, length.out  = n_temper)) #seq(K, 0, length.out = n_temper+1)
+        K_i <- Kseq[i]
+        a_vals <- rep(1/K_i, K_i)
+        # browser()
       }  
     }
     
@@ -59,10 +62,6 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       grads <- list()
       hessians <- list()
       
-      y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
-      X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
-      Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
-      
       ####### Development ###########
       beta_all <- samples[, 1:n_fixed_effects]
       
@@ -80,16 +79,28 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       ########### TF ###########
       
       if (use_tf) {
-        
+        tf64 <- function(x) tf$constant(x, dtype = "float64")
+  
+        y_i_tf <- tf$Variable(y[[i]], dtype = "float64")
+        X_i_tf <- tf$Variable(X[[i]], dtype = "float64")
+        Z_i_tf <- tf$Variable(Z[[i]], dtype = "float64")
+      
         alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
         theta_tf <- tf$Variable(samples, dtype = "float64")
         # 
         # # # #
         tf_out <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
-                                         alpha_all_tf, theta_tf, S_alpha)
+                                        alpha_all_tf, theta_tf, S_alpha)
+        
+        # tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
+        #                                 alpha_all_tf, theta_tf, S_alpha)
+        
         
         E_score_tf <- tf$math$reduce_mean(tf_out$grad, 0L)
         E_hessian_tf <- tf$math$reduce_mean(tf_out$hessian, 0L)
+
+        browser()
+
         prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
         mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))
         
@@ -427,7 +438,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   
   post_samples_list <- lapply(1:n_post_samples, function(r) rvgal.post_samples[r, -(1:n_fixed_effects)])
   post_samples_Sigma <- lapply(post_samples_list, construct_Sigma,
-                            d = n_random_effects)
+                               d = n_random_effects)
   
   nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
   lower_ind <- lapply(1:nlower, index_to_i_j_rowwise_diag)

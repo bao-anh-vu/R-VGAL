@@ -1,5 +1,5 @@
-compute_grad_hessian2 <- tf_function(
-  compute_grad_hessian2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
+compute_grad_hessian <- tf_function(
+  compute_grad_hessian <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
     
     # n_fixed_effects <- as.integer(ncol(X_i))#tf$cast(ncol(X_i), dtype = "int64")
     # n_random_effects <- as.integer(ncol(Z_i)) #tf$cast(ncol(Z_i), dtype = "int64")
@@ -7,7 +7,7 @@ compute_grad_hessian2 <- tf_function(
     # # n <- tf$cast(length(y_i), dtype = "int64")
     # S_alpha <- as.integer(ncol(alpha_i))
     
-    autodiff_out <- compute_joint_llh_tf2(y_i, X_i, Z_i, alpha_i, theta, S_alpha)
+    autodiff_out <- compute_joint_llh_tf(y_i, X_i, Z_i, alpha_i, theta, S_alpha)
     
     joint_grads <- autodiff_out$grad
     joint_hessians <- autodiff_out$hessian
@@ -46,8 +46,8 @@ compute_grad_hessian2 <- tf_function(
   reduce_retracing = T)
 
 
-compute_joint_llh_tf2 <- tf_function(
-compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
+compute_joint_llh_tf <- tf_function(
+compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   
   with (tf$GradientTape() %as% tape2, {
     with (tf$GradientTape(persistent = TRUE) %as% tape1, {
@@ -61,7 +61,7 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       beta_tf <- theta[, 1:n_fixed_effects]
       
       Lelements_tf <-  theta[, (n_fixed_effects+1):param_dim]
-      Lsamples_tf <- fill_lower_tri2(n_random_effects, Lelements_tf)
+      Lsamples_tf <- fill_lower_tri(n_random_effects, Lelements_tf)
       # Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
       
       ## Sample alpha_i here
@@ -187,7 +187,7 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
 reduce_retracing = T)
 
 fill_lower_tri_tf <- tf_function(
-fill_lower_tri2 <- function(dim, vals) {
+fill_lower_tri <- function(dim, vals) {
   
   
   d <- as.integer(dim)
