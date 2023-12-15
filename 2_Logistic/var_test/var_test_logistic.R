@@ -1,3 +1,4 @@
+setwd("~/R-VGAL/2_Logistic/")
 ## Test the variance of R-VGAL results on simulated logistic mixed model data ##
 
 ## Will take a while to run depending on how many R-VGAL runs are specified
@@ -19,8 +20,28 @@ library("reshape2")
 source("./source/run_rvgal.R")
 source("./source/run_stan_logmm.R")
 
+# List physical devices
+gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+if (length(gpus) > 0) {
+  tryCatch({
+    # Restrict TensorFlow to a certain amount of memory on the GPU
+    tf$config$experimental$set_virtual_device_configuration(
+      gpus[[1]],
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=16*4096))
+    )
+
+    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+
+    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+  }, error = function(e) {
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
+  })
+}
+
 ## Flags
-date <- "20230329" 
+date <- "20231201" #"20230329" 
 regenerate_data <- F
 save_data <- F
 rerun_test <- T
@@ -32,8 +53,8 @@ use_tempering <- T
 save_images <- T
 
 runs <- 10 # number of R-VGAL runs
-S <- 1000L
-S_alpha <- 1000L
+S <- 500L
+S_alpha <- 500L
 
 if (reorder_data) {
   reorder_seed <- 2023
@@ -45,7 +66,7 @@ if (use_tempering) {
 }
 
 ## Generate data
-N <- 500L #number of individuals
+N <- 2500L #number of individuals
 n <- 10L # number of responses per individual
 beta <- c(-1.5, 1.5, 0.5, 0.25) # c(-2, 1, param_dim, -4)  #
 n_fixed_effects <- length(beta)
@@ -82,7 +103,7 @@ if (regenerate_data) {
 ###################
 ##     R-VGA     ##
 ###################
-
+n_post_samples <- 20000
 n_fixed_effects <- as.integer(ncol(X[[1]]))
 param_dim <- n_fixed_effects + 1L
 
@@ -152,7 +173,8 @@ if (rerun_test) {
       rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,
                                 use_tempering = use_tempering, 
                                 n_temper = n_obs_to_temper, 
-                                temper_schedule = a_vals_temper)
+                                temper_schedule = a_vals_temper,
+                                n_post_samples = n_post_samples)
       
       mu_vals <- rvga_results$mu
       prec <- rvga_results$prec
@@ -179,7 +201,7 @@ if (rerun_test) {
 ##########
 ## STAN ##
 ##########
-n_post_samples <- 10000
+
 burn_in <- 5000
 
 if (rerun_stan) {
@@ -194,24 +216,39 @@ if (rerun_stan) {
                          n_groups = N, fixed_covariates = X_long)
   
   if (save_hmc_results) {
-    saveRDS(hfit, file = paste0("./results/logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
+    saveRDS(hmc_results, file = paste0("./results/logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds"))
   }
   
 } else {
-  hfit <- readRDS(file = paste0("./results/logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
+  hmc_results <- readRDS(file = paste0("./results/logistic_mm_hmc_N", N, "_n", n, "_", date, ".rds")) # for the experiements on starting points
 }
 
 ######################## Results #########################
 
 ## HMC results for comparison
-hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]","omega"),
-                   permuted = F)
-hmc.samples <- matrix(NA, dim(hmc.fit)[1], param_dim)
-for (p in 1:(param_dim-1)) {
-  hmc.samples[, p] <- hmc.fit[, , p]
+# hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]","omega"),
+#                    permuted = F)
+# hmc.samples <- matrix(NA, dim(hmc.fit)[1], param_dim)
+# for (p in 1:(param_dim-1)) {
+#   hmc.samples[, p] <- hmc.fit[, , p]
+# }
+# hmc.samples[, (param_dim-1)+1] <- sqrt(exp(hmc.fit[, , param_dim])) # transform omega samples to tau samples
+# # hmc.df <- data.frame(hmc.samples)
+# 
+# hmc.samples <- matrix(NA, n_post_samples, param_dim)
+hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
+hmc.samples <- matrix(NA, n_post_samples, param_dim)
+
+for (p in 1:param_dim) {
+  
+  if (p == param_dim) { # if the parameter is tau
+    # rvgal.post_samples[, p] <- sqrt(exp(rvga_results$post_samples[, p])) # then back-transform
+    hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
+  } else {
+    # rvgal.post_samples[, p] <- rvga_results$post_samples[, p]
+    hmc.samples[, p] <- hmc.fit[, , p]
+  }
 }
-hmc.samples[, (param_dim-1)+1] <- sqrt(exp(hmc.fit[, , param_dim])) # transform omega samples to tau samples
-# hmc.df <- data.frame(hmc.samples)
 
 ## R-VGA results
 n_post_samples <- 10000
@@ -274,7 +311,7 @@ grid.arrange(grobs = param_plots, nrow = 1, ncol = 5)
 ## Saving the plots
 if (save_images) {
   plot_directory <- paste0("./var_test/plots/")
-  plot_file = paste0("logistic_var_test", temper_info, reorder_info,
+  plot_file = paste0("logistic_var_test", "_N", N, "_n", n, temper_info, reorder_info,
                     "_S", S, "_Sa", S_alpha, "_", date, ".png")
   
   png(paste0(plot_directory, plot_file), width = 1500, height = 250)

@@ -48,9 +48,9 @@ source("./source/run_stan_lmm.R")
 
 date <- "20230329"
 regenerate_data <- F
-rerun_est_rvgal <- F
-rerun_exact_rvgal <- F
-rerun_hmc <- F
+rerun_est_rvgal <- T
+rerun_exact_rvgal <- T
+rerun_hmc <- T
 reorder_data <- F
 use_tempering <- T
 
@@ -208,6 +208,7 @@ hmc.fit <- hfit$post_samples[-(1:burn_in), , ] #extract(hfit, pars = c("beta[1]"
                    # permuted = F)
 hmc.n_eff <- hfit$n_eff
 hmc.Rhat <- hfit$Rhat
+
 ######################################
 ##              Results             ##
 ######################################
@@ -285,55 +286,6 @@ for (p in 1:param_dim) {
   plots[[p]] <- plot  
 }
 
-############## End dev ###############
-
-# for (p in 1:(param_dim-2)) {
-#   
-#   true_vals.df <- data.frame(name = param_names[p], val = param_values[p])
-#   
-#   plot <- ggplot(exact_rvgal.df, aes(x=.data[[param_names[p]]])) +
-#     # plot <- ggplot(exact_rvgal.df, aes(x=colnames(exact_rvgal.df)[p])) + 
-#     geom_density(col = "goldenrod", lwd = 1) +
-#     geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
-#     geom_density(data = hmc.df, col = "blue", lwd = 1) +
-#     geom_vline(data = true_vals.df, aes(xintercept=val),
-#                color="black", linetype="dashed", linewidth=1) +
-#     labs(x = bquote(beta[.(p)])) +
-#     theme_bw() +
-#     theme(axis.title = element_blank(), text = element_text(size = 18)) +
-#     scale_x_continuous(breaks = scales::pretty_breaks(n = 4))
-#   # theme(legend.position="bottom") + 
-#   # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
-#   
-#   plots[[p]] <- plot  
-# }
-# 
-# sigma_a_plot <- ggplot(exact_rvgal.df, aes(x=sigma_a)) + 
-#   geom_density(col = "goldenrod", lwd = 1) +
-#   geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
-#   geom_density(data = hmc.df, col = "blue", lwd = 1) +
-#   geom_vline(data = true_vals.df, aes(xintercept=sigma_a),
-#              color="black", linetype="dashed", linewidth=1) +
-#   labs(x = expression(sigma[alpha])) +
-#   theme_bw() +
-#   theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
-#   scale_x_continuous(breaks = scales::pretty_breaks(n = 4))
-# # theme(legend.position="bottom") +
-# # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
-# 
-# sigma_e_plot <- ggplot(exact_rvgal.df, aes(x=sigma_e)) + 
-#   geom_density(col = "goldenrod", lwd = 1) +
-#   geom_density(data = est_rvgal.df, col = "red", lwd = 1) +
-#   geom_density(data = hmc.df, col = "blue", lwd = 1) +
-#   geom_vline(data = true_vals.df, aes(xintercept=sigma_e),
-#              color="black", linetype="dashed", linewidth=1) + 
-#   labs(x = expression(sigma[epsilon])) +
-#   theme_bw() +
-#   theme(axis.title = element_blank(), text = element_text(size = 18)) +                               # Assign pretty axis ticks
-#   scale_x_continuous(breaks = scales::pretty_breaks(n = 4)) 
-# 
-# plots[[param_dim-1]] <- sigma_a_plot
-# plots[[param_dim]] <- sigma_e_plot
 
 ## Arrange bivariate plots in lower off-diagonals
 n_lower_tri <- (param_dim^2 - param_dim)/2 # number of lower triangular elements

@@ -89,17 +89,19 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
         theta_tf <- tf$Variable(samples, dtype = "float64")
         # 
         # # # #
+        # tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf, alpha_all_tf, theta_tf, S_alpha)
+        # browser()
+        
+        # tf_out_ad <- compute_joint_llh_tf(y_i_tf, X_i_tf, Z_i_tf, alpha_all_tf, theta_tf, S_alpha)
+        
+        
         tf_out <- compute_grad_hessian2(y_i_tf, X_i_tf, Z_i_tf,
                                         alpha_all_tf, theta_tf, S_alpha)
         
         # tf_out <- compute_grad_hessian(y_i_tf, X_i_tf, Z_i_tf,
         #                                 alpha_all_tf, theta_tf, S_alpha)
-        
-        
         E_score_tf <- tf$math$reduce_mean(tf_out$grad, 0L)
         E_hessian_tf <- tf$math$reduce_mean(tf_out$hessian, 0L)
-
-        browser()
 
         prec_temp <- prec_temp - a * as.matrix(E_hessian_tf)
         mu_temp <- mu_temp + chol2inv(chol(prec_temp)) %*% (a * as.matrix(E_score_tf))

@@ -23,14 +23,14 @@ source("./source/run_stan_logmm.R")
 source("./source/generate_data.R")
 
 ## Flags
-date <- "20230329"  
+date <- "20231201" #"20230329"  
 regenerate_data <- F
-rerun_rvgal <- F
-rerun_stan <- F
+rerun_rvgal <- T
+rerun_stan <- T
 save_data <- F
 save_rvga_results <- F
 save_hmc_results <- F
-save_plots <- F
+save_plots <- T
 reorder_data <- F
 use_tempering <- T
 
@@ -42,17 +42,20 @@ if (use_tempering) {
 n_post_samples <- 20000
 
 ## Generate data
-N <- 500L #number of individuals
+N <- 5000L #number of individuals
 n <- 10L # number of responses per individual
 beta <- c(-1.5, 1.5, 0.5, 0.25) 
 tau <- 0.9
 
 if (regenerate_data) {
   logistic_data <- generate_data(N = N, n = n, beta = beta, tau = tau,
-                                 seed = 2023,
-                                 save_data = save_data, date = date)
+                                 seed = 2023
+                                 )
+  if (save_data) {
+    saveRDS(logistic_data, file = paste0("./data/logistic_data_N", N, "_n", n, "_", date, ".rds"))
+  }
 } else {
-  logistic_data <- readRDS(file = paste0("./data/logistic_data_N", N, "_n", n, "_", "20230329", ".rds"))
+  logistic_data <- readRDS(file = paste0("./data/logistic_data_N", N, "_n", n, "_", date, ".rds"))
 }
 
 y <- logistic_data$y
@@ -72,11 +75,21 @@ if (reorder_data) {
   X <- reordered_X
 }
 
+## Prior
+n_fixed_effects <- as.integer(ncol(X[[1]]))
+param_dim <- n_fixed_effects + 1L
+
+beta_0 <- rep(0, param_dim - 1L)
+omega_0 <- log(0.5^2) 
+
+mu_0 <- c(beta_0, omega_0)
+P_0 <- diag(c(rep(10, n_fixed_effects), 1))
+
 ###################
 ##     R-VGA     ##
 ###################
-S <- 100L
-S_alpha <- 100L
+S <- 200L
+S_alpha <- 200L
 
 ## Set up result directory
 if (use_tempering) {
@@ -94,16 +107,6 @@ result_directory <- "./results/"
 results_file <- paste0("logistic_mm_rvga", temper_info, reorder_info, 
                        "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, ".rds")
 
-
-## Initialise variational parameters
-n_fixed_effects <- as.integer(ncol(X[[1]]))
-param_dim <- n_fixed_effects + 1L
-
-beta_0 <- rep(0, param_dim - 1L)
-omega_0 <- log(0.5^2) 
-
-mu_0 <- c(beta_0, omega_0)
-P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 
 if (rerun_rvgal) {
   rvga_results <- run_rvgal(y, X, mu_0, P_0, S = S, S_alpha = S_alpha,

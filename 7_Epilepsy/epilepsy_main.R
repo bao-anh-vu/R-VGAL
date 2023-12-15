@@ -65,13 +65,10 @@ if (use_tempering) {
   a_vals_temper <- rep(1/K, K)
 }
 
-
+## Read data
 data(epilepsy)
 head(epilepsy)
- #log �ij = ??0 + ??BaseBasei + ??TrtTrti + ??AgeAgei + 
-#??Base�TrtBasei � Trti + ??VisitVisitij + bi1 + bi2Visitij
 epilepsy$treatment <- ifelse(epilepsy$treatment == "Progabide", 1, 0)
-# epilepsy$period <- as.numeric(levels(epilepsy$period))[epilepsy$period]
 
 epilepsy2 <- epilepsy %>% mutate(log_age = log(age),
                     log_base = log(0.25*base),
@@ -123,7 +120,7 @@ Z <- Z_long %>% group_split(subject) # split observations by ID
 Z <- lapply(Z, function(x) { x["subject"] <- NULL; data.matrix(x) }) # get rid of the CA column then convert from df to matrix
 
 ## Response variable
-y_long <- epilepsy[c("seizure.rate", "subject")]
+y_long <- epilepsy2[c("seizure.rate", "subject")]
 y <- y_long %>% group_split(subject) # split observations by ID
 y <- lapply(y, function(x) { x["subject"] <- NULL; as.vector(data.matrix(x)) }) # get rid of the CA column then convert from df to matrix
 
@@ -260,9 +257,9 @@ for (p in 1:param_dim) {
 }
 
 if (grepl("interact", date)) {
-  fixed_ef_names <- c("0", "treatment", "base", "base_treat", "age", "visit")
+  fixed_ef_names <- c("1", "treatment", "base", "base_treat", "age", "visit")
 } else {
-  fixed_ef_names <- c("0", "treatment", "base", "age", "visit")
+  fixed_ef_names <- c("1", "treatment", "base", "age", "visit")
 }
 
 fixed_ef_labels <- sapply(1:n_fixed_effects, function(x) paste0("beta[", fixed_ef_names[x], "]"))

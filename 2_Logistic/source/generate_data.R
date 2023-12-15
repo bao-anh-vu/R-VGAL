@@ -1,4 +1,4 @@
-generate_data <- function(N, n, beta, tau, save_data = T, seed = NULL) {
+generate_data <- function(N, n, beta, tau, seed = NULL) {
   
   if (!is.null(seed)) {
     set.seed(seed)
@@ -23,10 +23,6 @@ generate_data <- function(N, n, beta, tau, save_data = T, seed = NULL) {
   
   logistic_data <- list(y = y, X = X, beta = beta, tau = tau, N = N, n = n)
   
-  # if (save_data) {
-  #   saveRDS(logistic_data, file = paste0("logistic_data_N", N, "_n", n, "_", date, ".rds"))
-  # }
-    
   return(logistic_data)  
   
 }

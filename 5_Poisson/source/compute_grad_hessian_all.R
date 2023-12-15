@@ -46,7 +46,7 @@ compute_grad_hessian <- tf_function(
   reduce_retracing = T)
 
 
-compute_joint_llh_tf <- tf_function(
+# compute_joint_llh_tf <- tf_function(
 compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   
   with (tf$GradientTape() %as% tape2, {
@@ -60,8 +60,9 @@ compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       # S_alpha <- as.integer(dim(alpha_i)[2])
       beta_tf <- theta[, 1:n_fixed_effects]
       
-      Lelements_tf <-  theta[, (n_fixed_effects+1):param_dim]
-      Lsamples_tf <- fill_lower_tri(n_random_effects, Lelements_tf)
+      Lelements_tf <- theta[, (n_fixed_effects+1):param_dim]
+      Lsamples_tf <- fill_lower_tri_tf(n_random_effects, Lelements_tf)
+      
       # Sigma_alpha_tf <- tf$linalg$matmul(Lsamples_tf, tf$transpose(Lsamples_tf))
       
       ## Sample alpha_i here
@@ -124,23 +125,26 @@ compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
       llh_y_i_tf_s <- pois$log_prob(y_i_tiled2)
       llh_y_i_tf <- tf$reduce_sum(llh_y_i_tf_s, 2L) # should be size S x S_alpha
       
+      ########## Dev ###########
       # Lsamples_tf_reshape <- tf$reshape(Lsamples_tf, c(1L, dim(Lsamples_tf)))
-      # Lsamples_tf_tiled <- tf$tile(Lsamples_tf_reshape, c(S_alpha, 1L, 1L))
+      # Lsamples_tf_tiled <- tf$tile(Lsamples_tf_reshape, c(S_alpha, 1L, 1L, 1L))
       # alpha_i_reshape <- tf$reshape(alpha_i, c(dim(alpha_i), 1L))
-      # 
-      # Amat <- tf$linalg$matmul(tf$linalg$inv(Lsamples_tf_tiled), alpha_i_reshape)
-      # 
-      # llh_alpha_i_tf <- - tf$reduce_sum(tf$math$log(tf$linalg$diag_part(Lsamples_tf_tiled)), 1L) -
-      #   tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
-      #   1/2 * tf$squeeze(tf$linalg$matmul(tf$transpose(Amat, perm = c(0L, 2L, 1L)), Amat))
       
-      if (n_random_effects == 1) {
-        norm <- tfd$Normal(loc = 0, scale = L_tf_tiled)
-        llh_alpha_i_tf <- tf$squeeze(norm$log_prob(alpha_i_reshaped))
-      } else {
-        norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
-        llh_alpha_i_tf <- norm$log_prob(alpha_i)
-      }
+      Amat <- tf$linalg$matmul(tf$linalg$inv(L_tf_tiled), alpha_i_reshaped)
+      
+      llh_alpha_i_tf <- - tf$math$log(tf$reduce_prod(tf$linalg$diag_part(L_tf_tiled), 2L)) -
+        tf$cast(n_random_effects/2 * tf$math$log(2*pi), dtype = "float64") -
+        1/2 * tf$squeeze(tf$linalg$matmul(tf$linalg$matrix_transpose(Amat), Amat))
+
+      ############## end dev ###########
+      # if (n_random_effects == 1) {
+      #   norm <- tfd$Normal(loc = 0, scale = L_tf_tiled)
+      #   llh_alpha_i_tf <- tf$squeeze(norm$log_prob(alpha_i_reshaped))
+      # } else {
+      #   norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
+      #   llh_alpha_i_tf <- norm$log_prob(alpha_i)
+      # }
+
       # llh_alpha_i_og <- norm$log_prob(alpha_i_og)
       
       log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
@@ -183,8 +187,8 @@ compute_joint_llh_tf <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
               hessian = grad2_tf,
               log_weights = log_weights,
               weights = weights))
-},
-reduce_retracing = T)
+}#,
+# reduce_retracing = T)
 
 fill_lower_tri_tf <- tf_function(
 fill_lower_tri <- function(dim, vals) {

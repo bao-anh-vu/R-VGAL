@@ -23,7 +23,7 @@ if (length(gpus) > 0) {
     # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
     tf$config$experimental$set_virtual_device_configuration(
       gpus[[1]],
-      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=2^14))
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
     )
     
     logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
@@ -35,14 +35,14 @@ if (length(gpus) > 0) {
   })
 }
 
-rerun_rvga <- F
-save_rvga_results <- F
-rerun_stan <- F
+rerun_rvga <- T
+save_rvgal_results <- F
+rerun_stan <- T
 save_hmc_results <- F
 date <- "20230327_1" 
 use_tempering <- T
 reorder_data <- F
-save_plots <- F
+save_plots <- T
 
 if (reorder_data) {
   reorder_seed <- 2023
@@ -99,6 +99,18 @@ X <- lapply(X, function(x) { x["ID"] <- NULL; data.matrix(x) }) # get rid of the
 N <- length(unique(data$ID)) # number of subjects
 n <- nrow(X[[1]]) # number of responses per subject
 
+######################################
+##        Maximum likelihood        ##
+######################################
+library(lme4)
+glm_fit <- glmer(POLYPHARMACY ~ 1 + GENDER + RACE_transf + AGE + 
+                                MHV1 + MHV2 + MHV3 + INPTMHV + (1 | ID),
+                                family = "binomial", data = data)
+
+fixef(glm_fit) ## returns fixed effects
+# ranef(glm_fit) ## returns random effects
+glm_params <- c(glm_fit@beta, glm_fit@theta)
+
 #############################
 ##          R-VGA          ##
 #############################
@@ -145,23 +157,23 @@ if (rerun_rvga) {
     X <- reordered_X
   }
   
-  rvga_results <- run_rvgal(y, X, mu_0, P_0, 
+  rvgal_results <- run_rvgal(y, X, mu_0, P_0, 
                             n_post_samples = n_post_samples,
                             S = S, S_alpha = S_alpha,
                             use_tempering = use_tempering, 
                             n_temper = n_obs_to_temper, 
                             temper_schedule = a_vals_temper,
-                            save_results = save_rvga_results)
+                            save_results = save_rvgal_results)
   
-  if (save_rvga_results) {
-    saveRDS(rvga_results, file = results_filepath)
+  if (save_rvgal_results) {
+    saveRDS(rvgal_results, file = results_filepath)
   }
   
 } else {
-  rvga_results <- readRDS(file = results_filepath)
+  rvgal_results <- readRDS(file = results_filepath)
 }
 
-rvga.post_samples <- rvga_results$post_samples
+rvga.post_samples <- rvgal_results$post_samples
 
 ####################
 ##      STAN      ##
@@ -215,10 +227,10 @@ hmc.samples <- matrix(NA, n_post_samples, param_dim)
 for (p in 1:param_dim) {
   
   if (p == param_dim) { # if the parameter is tau
-    rvgal.post_samples[, p] <- sqrt(exp(rvga_results$post_samples[, p])) # then back-transform
+    rvgal.post_samples[, p] <- sqrt(exp(rvgal_results$post_samples[, p])) # then back-transform
     hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
   } else {
-    rvgal.post_samples[, p] <- rvga_results$post_samples[, p]
+    rvgal.post_samples[, p] <- rvgal_results$post_samples[, p]
     hmc.samples[, p] <- hmc.fit[, , p]
   }
 }
@@ -245,9 +257,12 @@ colnames(hmc.df) <- param_names
 plots <- list()
 
 for (p in 1:(param_dim-1)) {
+  glm.df <- data.frame(param = param_names[p], val = glm_params[p])
   plot <- ggplot(rvgal.df, aes(x = .data[[param_names[p]]])) + 
     geom_density(col = "red", lwd = 1) +
     geom_density(data = hmc.df, col = "blue", lwd = 1) +
+    geom_vline(data = glm.df, aes(xintercept=val),
+               color="black", linetype="dashed", linewidth = 0.75) +
     labs(x = bquote(beta[.(p)])) +
     theme_bw() + 
     theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
@@ -258,9 +273,12 @@ for (p in 1:(param_dim-1)) {
   plots[[p]] <- plot  
 }
 
-tau_plot <- ggplot(rvgal.df, aes(x=tau)) + 
+glm.df <- data.frame(param = "tau", val = glm_fit@theta)
+tau_plot <- ggplot(rvgal.df, aes(x = tau)) + 
   geom_density(col = "red", lwd = 1) +
   geom_density(data = hmc.df, col = "blue", lwd = 1) +
+  geom_vline(data = glm.df, aes(xintercept=val),
+               color="black", linetype="dashed", linewidth = 0.75) +
   labs(x = expression(tau)) +
   theme_bw() + 
   theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
@@ -288,12 +306,15 @@ for (ind in 1:n_lower_tri) {
   mat_ind <- index_to_i_j_colwise_nodiag(ind, param_dim)
   p <- mat_ind[1]
   q <- mat_ind[2]
-  
+  glm.df <- data.frame(x = glm_params[q], y = glm_params[p])
+
   # cov_plot <- ggplot(rvgal.df, aes_string(x = param_names[p], y = param_names[q])) +
   cov_plot <- ggplot(rvgal.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
     stat_ellipse(col = "goldenrod", type = "norm", lwd = 1) +
     stat_ellipse(data = rvgal.df, col = "red", type = "norm", lwd = 1) +
     stat_ellipse(data = hmc.df, col = "blue", type = "norm", lwd = 1) +
+    geom_point(data = glm.df, aes(x = x, y = y),
+               shape = 4, color = "black", size = 5) +
     theme_bw() +
     theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
     scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
@@ -338,7 +359,7 @@ grid.draw(gp)
 # par(mfrow = c(3,3))
 # trajectories <- list()
 # for (p in 1:param_dim) {
-#   trajectories[[p]] <- sapply(rvga_results$mu, function(e) e[p])
+#   trajectories[[p]] <- sapply(rvgal_results$mu, function(e) e[p])
 #   plot(trajectories[[p]], type = "l", xlab = "Iteration", ylab = param_names[p], main = "")
 # }
 
@@ -353,6 +374,6 @@ if (save_plots) {
 
 ## Time benchmark
 hmc.time <- sum(colSums(hmc_results$time))
-rvga.time <- rvga_results$time_elapsed
+rvga.time <- rvgal_results$time_elapsed
 print(hmc.time)
 print(rvga.time)

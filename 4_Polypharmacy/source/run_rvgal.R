@@ -26,9 +26,9 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
   
   for (i in 1:N) {
     
-    if (S >= 500 && S_alpha >= 500) {
+    # if (S >= 500 && S_alpha >= 500) {
       gc() # garbage collection to avoid out of memory error; will slow code down
-    }
+    # }
     
     a_vals <- 1 # for tempering
     if (use_tempering) {

@@ -1,4 +1,4 @@
-setwd("/home/babv971/R-VGAL/5_Poisson/")
+# setwd("/home/babv971/R-VGAL/5_Poisson/")
 ## Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
@@ -51,15 +51,15 @@ source("./source/compute_grad_hessian_theoretical.R")
 source("./source/run_multi_sims_hmc.R")
 
 ## Flags
-date <- "20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
+date <- "20231018" #"20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
-rerun_rvgal_sims <- T
+rerun_rvgal_sims <- F
 rerun_hmc_sims <- F
 save_datasets <- F
 save_rvgal_sim_results <- F
 save_hmc_sim_results <- F
 plot_prior <- F
-save_plots <- F
+save_plots <- T
 reorder_data <- F
 use_tempering <- T
 
@@ -80,7 +80,7 @@ nsims <- 100
 ## Generate data
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-0.5, 1.25) 
+beta <- c(-1.5, 1.25) 
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
@@ -108,6 +108,7 @@ param_dim <- n_fixed_effects + n_random_effects * (n_random_effects+1)/2
 if (regenerate_data) {
   print("Generating data...")
   for (sim in 1:nsims) {
+  # for (sim in c(28)) {
     datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, 
                                      Sigma_alpha = Sigma_alpha)
     if (save_datasets) {
@@ -148,8 +149,9 @@ rvgal_sim_results <- list()
 error_inds <- c()
 
 print("Starting R-VGAL simulations...")
-for (sim in 1:2) {
-  
+for (sim in 1:nsims) {
+# for (sim in c(83)) {
+    
   skip_to_next <- FALSE
   
   rvgal.result_file <- paste0("poisson_rvgal", temper_info, reorder_info,
@@ -207,15 +209,16 @@ for (sim in 1:2) {
           saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
         }
       }, 
-      error = function(e) { error_inds = sim; skip_to_next <<- TRUE})
+      error = function(e) { error_inds = c(error_inds, sim); skip_to_next <<- TRUE})
     
     if(skip_to_next) { next }  
     
+    saveRDS(error_inds, file = paste0(result_directory, "error_inds.rds"))
+
   } else {
     rvgal_sim_results[[sim]] <- readRDS(file = paste0(result_directory, rvgal.result_file))
   }
 }
-
 
 ## Run HMC simulations
 print("Starting HMC simulations...")
@@ -225,8 +228,8 @@ n_chains <- 2
 
 if (rerun_hmc_sims) {
   
-  sims <- 1:nsims
-  parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 20L,
+  sims <- 28:28
+  parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 40L,
                      n_post_samples = n_post_samples,
                      burn_in = burn_in)
   # lapply(sims, run_multi_sims_hmc, n_post_samples = n_post_samples,
@@ -236,7 +239,7 @@ if (rerun_hmc_sims) {
 
 for (sim in 1:nsims) {
   hmc.result_file <- paste0(result_directory, 
-                            "poisson_hmc_N", N, "_n", n, "_", date, "_",
+                            "poisson_hmc_N", N, "_n", n, "_", "20231018", "_",
                             formatC(sim, width=3, flag="0"), ".rds")
   
   hmc_sim_results[[sim]] <- readRDS(file = hmc.result_file)
@@ -265,7 +268,7 @@ for (sim in 1:nsims) {
   hmc.sim_results_list[[sim]] <- hmc.samples
 }
 
-param_names <- c("beta[1]", "beta[2]", "sigma_alpha[11]", "sigma_alpha[21]", "sigma_alpha[22]")  
+param_names <- c("beta[1]", "beta[2]", "Sigma[alpha[11]]", "Sigma[alpha[21]]", "Sigma[alpha[22]]")  
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
 
 ## Obtain the means and standard deviations for each simulation
@@ -314,6 +317,10 @@ sds_df$ratio <- sds_df$rvgal_sd / sds_df$hmc_sd
 sds_df$param <- rep(param_names, each = nsims)
 sds_df$sim <- rep(1:nsims, param_dim)
 
+library(dplyr) 
+
+test <- means_df %>% filter(rvgal_diff > 0.5)
+
 ## Plot of R-VGAL means against HMC means
 plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + 
   geom_abline(linetype = 2, lwd = 1, col = "red") +
@@ -321,7 +328,7 @@ plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) +
   labs(x = "HMC means", y = "R-VGAL means") +
   theme_bw() +
   theme(strip.text.x = element_text(size = 24)) +
-  theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+  theme(text = element_text(size = 20)) + 
   facet_wrap(~param, scales = "free", nrow = 2, labeller=label_parsed)
 print(plot_means)
 
@@ -338,10 +345,10 @@ if (save_plots) {
 plot_sds <- ggplot(sds_df, aes(x = sim, y = ratio)) + 
   geom_abline(slope = 0, intercept = 1, linetype = 2, lwd = 1, col = "red") +
   geom_point(size = 3) +
-  labs(x = "Simulation", y = "SD ratio") +
+  labs(x = "Simulation number", y = "Ratio of R-VGAL and HMC posterior standard deviations") +
   theme_bw() +
   theme(strip.text.x = element_text(size = 24)) +
-  theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+  theme(text = element_text(size = 20)) + 
   facet_wrap(~param, scales = "free", labeller=label_parsed)
 print(plot_sds)
 
@@ -384,12 +391,13 @@ print(plot_means_diff3)
 plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) + 
   geom_density(colour = "red", lwd = 1) +
   geom_density(data = means_df, aes(x = hmc_diff), colour = "blue", lwd = 1) +
-  labs(x = "Differences", y = "Density") + 
+  labs(x = "Differences between the estimates and the true parameter", y = "Density") + 
   theme_bw() +
   facet_wrap(~param, ncol = param_dim, scales = "free", labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) +
   scale_x_continuous(n.breaks=4) +
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  theme(text = element_text(size = 24)) +
+  theme(panel.spacing = unit(2, "lines"))
 print(plot_dens_diff)
 
 if (save_plots) {

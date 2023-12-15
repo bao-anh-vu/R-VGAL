@@ -489,7 +489,7 @@ plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) +
   theme_bw() +
   facet_wrap(~param, scales = "free", labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) + 
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  theme(text = element_text(size = 20))
 print(plot_means)
 
 if (save_plots) {
@@ -505,11 +505,11 @@ if (save_plots) {
 plot_sds <- ggplot(sds_df, aes(x = sim, y = ratio)) + 
   geom_abline(slope = 0, intercept = 1, linetype = 2, lwd = 1, col = "red") +
   geom_point(size = 3) +
-  labs(x = "Simulation", y = "Variance ratio") +
+  labs(x = "Simulation number", y = "Ratio of R-VGAL and HMC posterior standard deviations") +
   theme_bw() +
   facet_wrap(~param, scales = "free", labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) + 
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  theme(text = element_text(size = 20))
 print(plot_sds)
 
 if (save_plots) {
@@ -545,13 +545,14 @@ if (save_plots) {
 plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) + 
   geom_density(colour = "red", lwd = 1) +
   geom_density(data = means_df, aes(x = hmc_diff), colour = "blue", lwd = 1) +
-  labs(x = "Differences", y = "Density") + 
+  labs(x = "Differences between the estimates and the true parameter", y = "Density") + 
   theme_bw() +
   # xlim(c(-0.12, 0.12)) +
   facet_wrap(~param, ncol = param_dim, scales = "free", labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) +
   scale_x_continuous(n.breaks=4) +
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  theme(text = element_text(size = 24)) +
+  theme(panel.spacing = unit(2, "lines"))
 print(plot_dens_diff)
 
 ## Saving the plots

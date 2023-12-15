@@ -40,7 +40,7 @@ library("gridExtra")
 library("reshape2")
 
 source("./source/generate_data.R")
-# source("./source/run_rvgal.R")
+source("./source/run_rvgal.R")
 source("./source/run_stan_logmm.R")
 
 date <- "20231017"
@@ -79,8 +79,7 @@ tau <- 0.9
 if (regenerate_data) {
   
   for (sim in 1:nsims) {
-    datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, tau = tau,
-                                    date = date)
+    datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, tau = tau)
     
     if (save_datasets) {
       saveRDS(datasets[[sim]], file = paste0("./data/multi_sims/logistic_data_N", N, 
@@ -472,10 +471,10 @@ sds_df$sim <- rep(1:nsims, param_dim)
 plot_means <- ggplot(means_df, aes(hmc_mean, rvgal_mean)) + 
   geom_abline(linetype = 2, lwd = 1, col = "red") +
   geom_point(size = 3) +
-  labs(x = "HMC means", y = "R-VGAL means") +
   theme_bw() +
   theme(strip.text.x = element_text(size = 24)) +
-  theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+  theme(text = element_text(size = 20)) +
+  labs(x = "HMC means", y = "R-VGAL means") +
   facet_wrap(~param, scales = "free", nrow = 2, labeller=label_parsed)
 print(plot_means)
 
@@ -492,10 +491,12 @@ if (save_plots) {
 plot_sds <- ggplot(sds_df, aes(x = sim, y = ratio)) + 
               geom_abline(slope = 0, intercept = 1, linetype = 2, lwd = 1, col = "red") +
               geom_point(size = 3) +
-              labs(x = "Simulation", y = "SD ratio") +
+              # labs(x = "Simulation number", y = bquote(sigma[R-VGAL]/sigma[HMC])) +
+              labs(x = "Simulation number", y = "Ratio of R-VGAL and HMC posterior standard deviations") +
               theme_bw() +
               theme(strip.text.x = element_text(size = 24)) +
-              theme(axis.title = element_blank(), text = element_text(size = 20)) + 
+              # theme(axis.title = element_blank(), text = element_text(size = 20)) +
+              theme(text = element_text(size = 20)) +
               facet_wrap(~param, scales = "free", labeller=label_parsed)
 print(plot_sds)
 
@@ -512,12 +513,12 @@ if (save_plots) {
 plot_means_diff <- ggplot(means_df, aes(hmc_diff, rvgal_diff)) + 
   geom_point(size = 3) +
   geom_abline(linetype = 2) +
-  labs(x = "Difference between HMC mean and true parameter", 
-       y = "Difference between R-VGAL mean and true parameter") +
+  labs(x = "Differences between HMC means and true parameter", 
+       y = "Differences between R-VGAL means and true parameter") +
   theme_bw() +
   facet_wrap(~param, scales = "free", labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) + 
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  theme(text = element_text(size = 18))
 print(plot_means_diff)
 
 # Plot differences per simulation
@@ -525,8 +526,8 @@ plot_means_diff3 <- ggplot(means_df, aes(rep(1:nsims, param_dim), rvgal_diff)) +
   geom_point(colour = "red") +
   geom_point(data = means_df, aes(rep(1:nsims, param_dim), hmc_diff), colour = "blue") +
   # geom_abline(linetype = 2) +
-  labs(x = "Simulation",
-       y = "Difference between R-VGAL/HMC means and true parameter") +
+  labs(x = "Simulation number",
+       y = "Differences between R-VGAL/HMC means and true parameter") +
   theme_bw() +
   facet_wrap(~param, scales = "free", nrow = param_dim, labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) + 
@@ -537,12 +538,13 @@ print(plot_means_diff3)
 plot_dens_diff <- ggplot(means_df, aes(x = rvgal_diff)) + 
   geom_density(colour = "red", lwd = 1) +
   geom_density(data = means_df, aes(x = hmc_diff), colour = "blue", lwd = 1) +
-  labs(x = "Differences", y = "Density") + 
+  labs(x = "Differences between the estimates and the true parameter", y = "Density") + 
   theme_bw() +
   facet_wrap(~param, ncol = param_dim, labeller=label_parsed) +
   theme(strip.text.x = element_text(size = 24)) +
-  scale_x_continuous(n.breaks=4) +
-  theme(axis.title = element_blank(), axis.text = element_text(size = 18))
+  scale_x_continuous(n.breaks=3) +
+  theme(text = element_text(size = 24)) +
+  theme(panel.spacing = unit(2, "lines"))
 print(plot_dens_diff)
 
 if (save_plots) {

@@ -53,13 +53,13 @@ source("./source/run_stan_poisson.R")
 source("./source/generate_data.R")
 source("./source/generate_data2.R")
 # source("./source/compute_joint_llh_tf.R")
-source("./source/compute_grad_hessian_all.R")
+# source("./source/compute_grad_hessian_all.R")
 source("./source/compute_grad_hessian_theoretical.R")
 
 ## Flags
-date <- "20231018" #"20231116" #has 2 fixed effects, ""20231030" has 4    
+date <- "20231201" #"20231018"   "20231203" # #"20231116" #has 2 fixed effects, ""20231030" has 4    
 regenerate_data <- F
-rerun_rvga <- F 
+rerun_rvga <- F
 rerun_stan <- F
 save_data <- F
 save_rvgal_results <- F
@@ -82,7 +82,7 @@ n_random_effects <- 2
 
 ## Generate data
 set.seed(2023)
-N <- 200L #number of individuals
+N <- 500L #number of individuals
 n <- 10L # number of responses per individual
 
 beta <- 0
@@ -134,6 +134,7 @@ beta <- poisson_data$beta
 Sigma_alpha <- poisson_data$Sigma_alpha
 
 ## Reorder data if needed
+reorder_seed <- 2024
 if (reorder_data) {
   set.seed(reorder_seed) 
   reordered_ind <- sample(1:length(y))
@@ -147,9 +148,9 @@ if (reorder_data) {
 
 hist(unlist(y))
 
-###################
-##     R-VGA     ##
-###################
+####################
+##     R-VGAL     ##
+####################
 S <- 200L
 S_alpha <- 200L
 
@@ -168,7 +169,6 @@ if (reorder_data) {
 result_directory <- paste0("./results/", n_random_effects, "d/")
 results_file <- paste0("poisson_mm_rvga", temper_info, reorder_info, 
                        "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, ".rds")
-
 
 ## Initialise variational parameters
 n_fixed_effects <- as.integer(ncol(X[[1]]))
@@ -197,7 +197,7 @@ if (n_random_effects == 2) {
 
 if (plot_prior) {
   
-  n_prior_samples <- 1000
+  n_prior_samples <- 100000
   prior_samples <- rmvnorm(n_prior_samples, mu_0, P_0)
   
   rvgal.Sigma_prior_samples <- list()
@@ -205,7 +205,6 @@ if (plot_prior) {
     rvgal.Sigma_prior_samples[[k]] <- construct_Sigma(prior_samples[k, -(1:n_fixed_effects)], 
                                                       n_random_effects)
   }
-  
   rvgal.prior_samples <- matrix(NA, nrow = n_prior_samples, ncol = param_dim)
   rvgal.prior_samples[, 1:n_fixed_effects] <- prior_samples[, 1:n_fixed_effects]
   
@@ -216,7 +215,15 @@ if (plot_prior) {
     rvgal.prior_samples[, n_fixed_effects+d] <- unlist(lapply(rvgal.Sigma_prior_samples, function(Sigma) Sigma[inds[1], inds[2]]))
   }
   
+  ## 2.5th and 97.5th percentiles
+  s11 <- sort(rvgal.prior_samples[, 3])
+  s21 <- sort(rvgal.prior_samples[, 4])
+  s22 <- sort(rvgal.prior_samples[, 5])
+  print(c(s11[2500], s11[97500]))
+  print(c(s22[2500], s22[97500]))
+  print(c(s21[2500], s21[97500]))
   
+  browser()
   par(mfrow = c(2,3))
   true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
   for (p in 1:param_dim) {
@@ -224,6 +231,7 @@ if (plot_prior) {
     abline(v = true_vals[p], lty = 2)
   }
 }
+
 
 #################
 ##     R-VGA   ##
@@ -246,27 +254,13 @@ if (rerun_rvga) {
   rvgal_results <- readRDS(file = paste0(result_directory, results_file))
 }
 
-
 rvgal.post_samples <- rvgal_results$post_samples
-
-# rvgal.Sigma_post_samples <- list()
-# for (k in 1:n_post_samples) {
-#   rvgal.Sigma_post_samples[[k]] <- construct_Sigma(rvgal.post_samples[k, -(1:n_fixed_effects)], 
-#                                                    n_random_effects)
-# }
-# 
-# nlower <- n_random_effects * (n_random_effects-1)/2 + n_random_effects
-# lower_ind <- lapply(1:nlower, index_to_i_j_rowwise_diag)
-# for (d in 1:(param_dim - n_fixed_effects)) {
-#   inds <- lower_ind[[d]]
-#   rvgal.post_samples[, n_fixed_effects+d] <- unlist(lapply(rvgal.Sigma_post_samples, function(Sigma) Sigma[inds[1], inds[2]]))
-# }
 
 # ########################
 # ##        STAN        ##
 # ########################
 burn_in <- 5000
-n_chains <- 2
+n_chains <- 1#2
 hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
@@ -293,14 +287,6 @@ if (rerun_stan) {
   
 }
 
-# param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
-#                  "Sigma_alpha[2,1]",
-#                  "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
-#                  "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
-# 
-# hmc.fit <- extract(hfit, pars = param_names,
-#                    permuted = F, inc_warmup = F)
-
 hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
 hmc.summ <- hmc_results$summary
 hmc.n_eff <- hmc_results$n_eff
@@ -308,7 +294,6 @@ hmc.Rhat <- hmc_results$Rhat
 
 ######################## Results #########################
 
-# rvgal.post_samples <- matrix(NA, nrow = n_post_samples, ncol = param_dim)
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
@@ -319,23 +304,12 @@ for (p in 1:param_dim) {
   }
 }
 
+############################################
+##            Posterior plots             ##
+############################################
+
 param_names <- c("beta[1]", "beta[2]", "sigma_alpha[11]", "sigma_alpha[21]", "sigma_alpha[22]")  
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
-
-# par(mfrow = c(n_random_effects, ceiling(param_dim/n_random_effects)))
-# for (p in 1:param_dim) {
-#   plot(density(hmc.samples[, p]), main = param_names[p])
-#   lines(density(rvgal.post_samples[, p]), col = "red")
-#   abline(v = true_vals[p], lty = 2)
-# }
-
-## ggplot version
-# true_vals.df <- data.frame(beta1 = beta[1], beta2 = beta[2],
-#                            sigma_alpha11 = Sigma_alpha[1,1],
-#                            sigma_alpha21 = Sigma_alpha[2,1],
-#                            sigma_alpha22 = Sigma_alpha[2,2])
-
-# true_vals.df <- data.frame(param = param_names, param_vals = true_vals)
 
 rvgal.df <- data.frame(beta = rvgal.post_samples) 
 hmc.df <- data.frame(beta = hmc.samples)
@@ -356,8 +330,6 @@ for (p in 1:param_dim) {
     theme_bw() + 
     theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
     scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
-  # theme(legend.position="bottom") + 
-  # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
   
   plots[[p]] <- plot  
 }
@@ -384,7 +356,6 @@ for (ind in 1:n_lower_tri) {
   
   param_df <- data.frame(x = true_vals[q], y = true_vals[p])
   
-  # cov_plot <- ggplot(rvgal.df, aes_string(x = param_names[p], y = param_names[q])) +
   cov_plot <- ggplot(rvgal.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
     stat_ellipse(col = "goldenrod", type = "norm", lwd = 1) +
     stat_ellipse(data = rvgal.df, col = "red", type = "norm", lwd = 1) +
@@ -454,12 +425,12 @@ if (plot_trace) {
     abline(h = true_vals[p], lty = 2, col = "red")
   }
   
-  ## HMC traceplots
-  par(mfrow = c(ceiling(param_dim/2), 2))
-  for (p in 1:param_dim) {
-    plot(hmc.samples[,p], type = "l", main = param_names[p])
-    abline(h = true_vals[p], lty = 2, col = "red")
-  }
+  # ## HMC traceplots
+  # par(mfrow = c(ceiling(param_dim/2), 2))
+  # for (p in 1:param_dim) {
+  #   plot(hmc.samples[,p], type = "l", main = param_names[p])
+  #   abline(h = true_vals[p], lty = 2, col = "red")
+  # }
   
 }
 

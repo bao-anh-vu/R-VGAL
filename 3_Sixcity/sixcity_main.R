@@ -15,9 +15,9 @@ library("gtable")
 source("./source/run_rvgal.R")
 source("./source/run_stan_logmm.R")
 
-rerun_rvga <- F
-save_rvga_results <- F
-rerun_stan <- F
+rerun_rvga <- T
+save_rvgal_results <- F
+rerun_stan <- T
 save_hmc_results <- F
 date <- "20230327" 
 reorder_data <- T
@@ -55,6 +55,18 @@ X_long = cbind(data[ , c("subject")], intercept, data[, fixed_effects])
 colnames(X_long) <- c("subject", "intercept", fixed_effects)
 X <- X_long %>% group_split(subject) # split observations by subject (child)
 X <- lapply(X, function(x) { x["subject"] <- NULL; data.matrix(x) }) # get rid of the subject column then convert from df to matrix
+
+####################################
+##       Maximum Likelihood       ##
+####################################
+
+library(lme4)
+glm_fit <- glmer(wheezing ~ 1 + age + smoke + (1 | subject),
+                                family = "binomial", data = data)
+
+fixef(glm_fit) ## returns fixed effects
+# ranef(glm_fit) ## returns random effects
+glm_params <- c(glm_fit@beta, glm_fit@theta)
 
 ## RVGA ##
 
@@ -111,23 +123,23 @@ if (rerun_rvga) {
     X <- X
   }
   
-  rvga_results <- run_rvgal(y, X, mu_0, P_0, 
+  rvgal_results <- run_rvgal(y, X, mu_0, P_0, 
                             n_post_samples = n_post_samples,
                             S = S, S_alpha = S_alpha,
                             use_tempering = use_tempering, 
                             n_temper = n_obs_to_temper, 
                             temper_schedule = a_vals_temper)
   
-  if (save_rvga_results) {
-    saveRDS(rvga_results, file = results_filepath)
+  if (save_rvgal_results) {
+    saveRDS(rvgal_results, file = results_filepath)
   }
   
 } else {
-  rvga_results <- readRDS(file = results_filepath)
+  rvgal_results <- readRDS(file = results_filepath)
 }
 
-rvga.post_samples <- rvga_results$post_samples
-mu_vals <- rvga_results$mu
+rvga.post_samples <- rvgal_results$post_samples
+mu_vals <- rvgal_results$mu
 
 ##########
 ## STAN ##
@@ -199,9 +211,13 @@ colnames(hmc.df) <- param_names
 plots <- list()
 
 for (p in 1:(param_dim-1)) {
+  glm.df <- data.frame(param = param_names[p], val = glm_params[p])
+
   plot <- ggplot(rvga.df, aes(x = .data[[param_names[p]]])) + 
     geom_density(col = "red", lwd = 1) +
     geom_density(data = hmc.df, col = "blue", lwd = 1) +
+    geom_vline(data = glm.df, aes(xintercept=val),
+               color="black", linetype="dashed", linewidth = 0.75) +
     labs(x = bquote(beta[.(p)])) +
     theme_bw() + 
     theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
@@ -212,9 +228,12 @@ for (p in 1:(param_dim-1)) {
   plots[[p]] <- plot  
 }
 
+glm.df <- data.frame(param = "tau", val = glm_fit@theta)
 tau_plot <- ggplot(rvga.df, aes(x=tau)) + 
   geom_density(col = "red", lwd = 1) +
   geom_density(data = hmc.df, col = "blue", lwd = 1) +
+  geom_vline(data = glm.df, aes(xintercept=val),
+               color="black", linetype="dashed", linewidth = 0.75) +
   theme_bw() +
   labs(x = expression(tau)) +
   theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
@@ -237,10 +256,12 @@ for (ind in 1:n_lower_tri) {
   mat_ind <- index_to_i_j_colwise_nodiag(ind, param_dim)
   p <- mat_ind[1]
   q <- mat_ind[2]
-  
+  glm.df <- data.frame(x = glm_params[q], y = glm_params[p])
   cov_plot <- ggplot(rvga.df, aes(x = .data[[param_names[q]]], y = .data[[param_names[p]]])) +
     stat_ellipse(col = "red", type = "norm", lwd = 1) +
     stat_ellipse(data = hmc.df, col = "blue", type = "norm", lwd = 1) +
+    geom_point(data = glm.df, aes(x = x, y = y),
+               shape = 4, color = "black", size = 5) +
     theme_bw() +
     theme(axis.title = element_blank(), axis.text = element_text(size = 16)) +                               # Assign pretty axis ticks
     scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) 
@@ -288,4 +309,9 @@ if (save_plots) {
   grid.draw(gp)
   dev.off()
 } 
+
+## Time benchmark
+hmc.time <- sum(colSums(hmc_results$time)) # sum over all chains
+rvga.time <- rvgal_results$time_elapsed
+cat("HMC time:", hmc.time, ", R-VGAL time:", rvga.time[3], "\n")
 
