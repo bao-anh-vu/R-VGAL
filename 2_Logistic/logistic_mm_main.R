@@ -10,7 +10,7 @@ rm(list=ls())
 ## Flags
 date <- "20231201" #"20230329"  
 regenerate_data <- F
-rerun_rvgal <- T
+rerun_rvgal <- F
 rerun_stan <- T
 save_data <- F
 save_rvga_results <- F
