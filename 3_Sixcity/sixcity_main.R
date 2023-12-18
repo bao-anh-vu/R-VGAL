@@ -1,28 +1,29 @@
-setwd("~/R-VGAL/3_Sixcity")
+## R-VGAL with Six City data 
 
-## R-VGAL with six city data ##
+# setwd("~/R-VGAL/3_Sixcity")
 
-# reticulate::use_condaenv("tf2.11", required = TRUE)
-library("tensorflow")
-library("dplyr")
-library("mvtnorm")
-library("rstan")
-library("ggplot2")
-library("gridExtra")
-library("grid")
-library("gtable")
-
-source("./source/run_rvgal.R")
-source("./source/run_stan_logmm.R")
-
+## Flags
+date <- "20230327"
 rerun_rvga <- T
 save_rvgal_results <- F
 rerun_stan <- T
 save_hmc_results <- F
-date <- "20230327" 
 reorder_data <- T
 use_tempering <- T
 save_plots <- F
+
+# reticulate::use_condaenv("tf2.11", required = TRUE)
+library(tensorflow)
+library(dplyr)
+library(mvtnorm)
+library(rstan)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(gtable)
+
+source("./source/run_rvgal.R")
+source("./source/run_stan_logmm.R")
 
 if (reorder_data) {
   reorder_seed <- 2024
@@ -68,7 +69,9 @@ fixef(glm_fit) ## returns fixed effects
 # ranef(glm_fit) ## returns random effects
 glm_params <- c(glm_fit@beta, glm_fit@theta)
 
-## RVGA ##
+##############################
+##          R-VGAL          ##
+##############################
 
 if (use_tempering) {
   temper_info <- paste0("_temper", n_obs_to_temper)
@@ -141,9 +144,10 @@ if (rerun_rvga) {
 rvga.post_samples <- rvgal_results$post_samples
 mu_vals <- rvgal_results$mu
 
-##########
-## STAN ##
-##########
+#######################    
+##        HMC        ##
+#######################
+
 burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
@@ -156,13 +160,6 @@ if (rerun_stan) {
   X_long <- cbind(intercept, data[, fixed_effects])
   
   logistic_code <- "./source/logistic_mm.stan"
-  
-  # logistic_data <- list(N = N * n, M = N, K = length(fixed_effects)+1, y = y, 
-  #                       x = X, g = rep(1:N, each = n))
-  
-  # hfit <- stan(file = logistic_code, 
-  #              model_name="logistic_mm", data = logistic_data, 
-  #              iter = hmc.iters, warmup = burn_in, chains=n_chains)
   
   hmc_results <- run_stan_logmm(iters = hmc.iters, burn_in = burn_in, 
                          n_chains = n_chains, data = y_long, 
@@ -190,7 +187,9 @@ for (p in 1:(param_dim-1)) {
 }
 hmc.samples[, (param_dim-1)+1] <- sqrt(exp(hmc.fit[, , (param_dim-1)+1])) # transform omega samples to tau samples
 
-################################# Results ######################################
+###########################
+##        Results        ##
+###########################
 
 ## Parameter trajectories
 par(mfrow = c(2,2))

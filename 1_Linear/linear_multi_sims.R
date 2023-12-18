@@ -1,34 +1,46 @@
-setwd("~/R-VGAL/1_Linear/")
-
-## Structure of the code:
-## 1. Regenerate data
-## 2. Run R-VGAL with estimated gradients/Hessians
-## 3. Run R-VGAL with theoretical gradients/Hessians
-## 4. Run HMC 
+## Run repeated simulations on the linear mixed model
 
 rm(list = ls())
+# setwd("~/R-VGAL/1_Linear/")
 
-# library("tensorflow")
-# 
-# # List physical devices
-# gpus <- tf$config$experimental$list_physical_devices('GPU')
-# 
-# if (length(gpus) > 0) {
-#   tryCatch({
-#     # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
-#     tf$config$experimental$set_virtual_device_configuration(
-#       gpus[[1]],
-#       list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
-#     )
-#     
-#     logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
-#     
-#     print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
-#   }, error = function(e) {
-#     # Virtual devices must be set before GPUs have been initialized
-#     print(e)
-#   })
-# }
+## Flags
+date <- "20230329"
+regenerate_data <- F
+rerun_rvgal_sims <- F
+rerun_hmc_sims <- F
+reorder_data <- F
+use_tempering <- T
+
+plot_miniplots <- F
+
+save_datasets <- F
+save_rvgal_sim_results <- F
+save_hmc_sim_results <- F
+save_plots <- T
+
+## Load packages
+
+library(tensorflow)
+
+# List physical devices
+gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+if (length(gpus) > 0) {
+  tryCatch({
+    # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
+    tf$config$experimental$set_virtual_device_configuration(
+      gpus[[1]],
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
+    )
+    
+    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+    
+    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+  }, error = function(e) {
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
+  })
+}
 
 library(mvtnorm)
 library(Matrix)
@@ -47,19 +59,6 @@ source("./source/run_exact_rvgal.R")
 # source("./source/run_finite_difference.R") # to calculate numerical gradients/Hessians for comparison with theoretical ones
 source("./source/run_stan_lmm.R")
 
-date <- "20230329"
-regenerate_data <- F
-rerun_rvgal_sims <- F
-rerun_hmc_sims <- F
-reorder_data <- F
-use_tempering <- T
-
-plot_miniplots <- F
-
-save_datasets <- F
-save_rvgal_sim_results <- F
-save_hmc_sim_results <- F
-save_plots <- T
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -75,7 +74,10 @@ n_post_samples <- 20000
 
 datasets <- list()
 
-## 1. Generate data
+####################################
+##        1. Generate data        ##
+####################################
+
 ### True parameters
 sigma_a <- 0.9
 sigma_e <- 0.7
@@ -129,6 +131,10 @@ var_beta_0 <- rep(10, n_fixed_effects)
 var_phi_0 <- 1
 var_psi_0 <- 1
 P_0 <- diag(c(var_beta_0, var_phi_0, var_psi_0), param_dim)
+
+########################################
+##    2. Run repeated simulations     ## 
+########################################
 
 rvgal_sim_results <- list()
 
@@ -198,48 +204,17 @@ if (rerun_rvgal_sims) {
 
 # browser()
 
+############################
+##       3. Run HMC       ##
+############################
 
-## 4. Run HMC 
 burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
 
 hmc_sim_results <- list()
 if (rerun_hmc_sims) {
-  
-  # for (sim in 8:nsims) {
-  #   cat("Sim", sim, "in progress... \n")
-  #   
-  #   linear_data <- datasets[[sim]]
-  #   
-  #   y <- linear_data$y
-  #   X <- linear_data$X
-  #   Z <- linear_data$Z
-  #   beta <- linear_data$beta
-  #   sigma_a <- linear_data$sigma_a
-  #   sigma_e <- linear_data$sigma_e
-  #   
-  #   hmc.result_file <- paste0(result_directory, 
-  #          "linear_hmc_N", N, "_n", n, "_", date, "_",
-  #          formatC(sim, width=3, flag="0"), ".rds")
-  #   
-  #   hfit <- run_stan_lmm(data = y, fixed_covariates = X, 
-  #                        random_covariates = Z,
-  #                        iters = hmc.iters, burn_in = burn_in,
-  #                        nchains = n_chains,
-  #                        prior_mean = mu_0,
-  #                        prior_var = P_0)
-  #   
-  #   # hmc.fit <- extract(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]", "phi", "psi"), 
-  #   #                    permuted = F)
-  #   
-  #   hmc_sim_results[[sim]] <- hfit #hmc.fit
-  #   
-  #   if (save_hmc_sim_results) {
-  #     saveRDS(hmc_sim_results[[sim]], file = hmc.result_file)
-  #   }
-  # }
-  
+
   sims <- 1:100
   parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 10L)
   
@@ -265,17 +240,11 @@ hmc.sim_results_list <- list()
 for (sim in 1:nsims) {
   
   ## R-VGAL posterior samples
-  # post_mu <- rvgal_sim_results[[sim]]$mu[[N+1]]
-  # post_var <- chol2inv(chol(rvgal_sim_results[[sim]]$prec[[N+1]]))
   rvgal.sim_results_list[[sim]] <- rvgal_sim_results[[sim]]$post_samples  #rmvnorm(n_post_samples, post_mu, post_var)
   
   hmc.samples <- matrix(NA, n_post_samples, param_dim)
   for (p in 1:param_dim) {
-    # if (p == (param_dim - 1) || p == param_dim) { # if the parameters are variance parameters
-    #   hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
-    # } else {
-      hmc.samples[, p] <- hmc_sim_results[[sim]]$post_samples[-(1:burn_in), , p]
-    # }
+    hmc.samples[, p] <- hmc_sim_results[[sim]]$post_samples[-(1:burn_in), , p]
   }
   hmc.sim_results_list[[sim]] <- hmc.samples
 }
@@ -367,43 +336,6 @@ for (p in 1:param_dim) {
   hmc.post_samples_df_long <- melt(hmc.post_samples_df, id.vars = 'id', variable.name = 'run')
   hmc.post_samples_df_long$method <- rep("HMC", nrow(hmc.post_samples_df_long))
   
-  # if (p == param_dim - 1) { ## if the parameter is sigma_alpha
-  #   plot <- ggplot(rvgal.post_samples_df_long, aes(x = value, group = run)) + #geom_line(aes(colour = series))
-  #     # geom_density(aes(col = method)) +
-  #     geom_density(colour = "salmon") +
-  #     # scale_color_brewer(palette="Reds") +
-  #     geom_density(data = hmc.post_samples_df_long, aes(x = value, group = run)) +
-  #     # scale_color_brewer(palette="Blues") +
-  #     geom_vline(data = param_df, aes(xintercept=x),
-  #                color="black", linetype="dashed", linewidth=0.75) +
-  #     theme_bw() +
-  #     theme(legend.position="none") +
-  #     labs(x = expression(sigma[alpha]))
-  # } else if (p == param_dim) { # the parameter is sigma_epsilon
-  #   plot <- ggplot(rvgal.post_samples_df_long, aes(x = value, group = run)) + #geom_line(aes(colour = series))
-  #     # geom_density(aes(col = method)) +
-  #     geom_density(colour = "salmon") +
-  #     # scale_color_brewer(palette="Reds") +
-  #     geom_density(data = hmc.post_samples_df_long, aes(x = value, group = run)) +
-  #     # scale_color_brewer(palette="Blues") +
-  #     geom_vline(data = param_df, aes(xintercept=x),
-  #                color="black", linetype="dashed", linewidth=0.75) +
-  #     theme_bw() +
-  #     theme(legend.position="none") +
-  #     labs(x = expression(sigma[epsilon]))
-  # } else {
-  #   plot <- ggplot(rvgal.post_samples_df_long, aes(x = value, group = run)) + #geom_line(aes(colour = series))
-  #     # geom_density(aes(col = method)) +
-  #     geom_density(colour = "salmon") + 
-  #     scale_color_brewer(palette="Reds") +
-  #     geom_density(data = hmc.post_samples_df_long, aes(x = value, group = run)) +
-  #     # scale_color_brewer(palette="Blues") +
-  #     geom_vline(data = param_df, aes(xintercept=x),
-  #                color="black", linetype="dashed", linewidth=0.75) +
-  #     theme_bw() +
-  #     theme(legend.position="none") +
-  #     labs(x = bquote(beta[.(subscripts[p])]))
-  # }
 
   plot <- ggplot(rvgal.post_samples_df_long, aes(x = value, group = run)) + #geom_line(aes(colour = series))
     # geom_density(aes(col = method)) +
@@ -423,8 +355,6 @@ for (p in 1:param_dim) {
 # my_col_scheme <- c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#7B8A7B",
 # "#0B29D6", "#f781bf", "#999999", "black")
 
-#################
-
 ## Obtain the means and standard deviations for each simulation
 rvgal.means <- matrix(nrow = nsims, ncol = param_dim)
 rvgal.sds <- matrix(nrow = nsims, ncol = param_dim)
@@ -441,13 +371,6 @@ rvgal.sds_allparams <- lapply(rvgal.sim_results_list, function(x) apply(x, 2, sd
 par(mfrow = c(2, 3))
 for (p in 1:param_dim) {
   
-  # if (p == param_dim || p == (param_dim - 1)) {
-  #   rvgal.means[, p] <- sapply(1:nsims, function(sim) sqrt(exp(rvgal_sim_results[[sim]]$mu[[N+1]][p]))) 
-  # } else {
-  #   rvgal.means[, p] <- sapply(1:nsims, function(sim) rvgal_sim_results[[sim]]$mu[[N+1]][p]) 
-  #   
-  # }
-  # rvgal.means[, p] <- sapply(1:nsims, function(sim) rvgal_sim_results[[sim]]$mu[[N+1]][p])
   rvgal.means[, p] <- sapply(rvgal.means_allparams, function(x) x[p])
   hmc.means[, p] <- sapply(hmc.means_allparams, function(x) x[p])
   
@@ -455,8 +378,6 @@ for (p in 1:param_dim) {
   rvgal.sds[, p] <- sapply(rvgal.sds_allparams, function(x) x[p])
   hmc.sds[, p] <- sapply(hmc.sds_allparams, function(x) x[p])
   
-  # plot(hmc.means[, p], rvgal.means[, p])
-  # abline(0, 1, lty = 2)
 }
 
 param_names <- c("beta[1]", "beta[2]", "beta[3]", "beta[4]", "sigma[alpha]", "sigma[epsilon]")
@@ -471,7 +392,9 @@ sds_df$ratio <- sds_df$rvgal_sd / sds_df$hmc_sd
 sds_df$param <- rep(param_names, each = nsims)
 sds_df$sim <- rep(1:nsims, param_dim)
 
-## ggplots
+############################
+##      Plot results      ##
+############################
 
 equal_breaks <- function(n = 3, s = 0.05, r = 0,...){ # for controlling number of axis ticks
   function(x){

@@ -1,5 +1,16 @@
-setwd("~/R-VGAL/4_Polypharmacy/")
 ## Logistic mixed model with POLYPHARMACY data ##
+
+# setwd("~/R-VGAL/4_Polypharmacy/")
+
+## Flags
+rerun_rvgal <- F
+save_rvgal_results <- F
+rerun_stan <- F
+save_hmc_results <- F
+date <- "20230327_1" 
+use_tempering <- T
+reorder_data <- F
+save_plots <- F
 
 # reticulate::use_condaenv("tf2.11", required = TRUE)
 library("tensorflow")
@@ -34,15 +45,6 @@ if (length(gpus) > 0) {
     print(e)
   })
 }
-
-rerun_rvga <- T
-save_rvgal_results <- F
-rerun_stan <- T
-save_hmc_results <- F
-date <- "20230327_1" 
-use_tempering <- T
-reorder_data <- F
-save_plots <- T
 
 if (reorder_data) {
   reorder_seed <- 2023
@@ -106,6 +108,9 @@ library(lme4)
 glm_fit <- glmer(POLYPHARMACY ~ 1 + GENDER + RACE_transf + AGE + 
                                 MHV1 + MHV2 + MHV3 + INPTMHV + (1 | ID),
                                 family = "binomial", data = data)
+ss <- getME(glm_fit, c("theta","fixef"))
+update(glm_fit, start = ss, control = glmerControl(optimizer="bobyqa",
+                            optCtrl = list(maxfun=2e5)))
 
 fixef(glm_fit) ## returns fixed effects
 # ranef(glm_fit) ## returns random effects
@@ -143,7 +148,7 @@ omega_0 <- 1 #log(0.5^2)
 mu_0 <- c(beta_0, omega_0)
 P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 
-if (rerun_rvga) {
+if (rerun_rvgal) {
   
   ## Reorder data if needed
   if (reorder_data) {
@@ -267,9 +272,7 @@ for (p in 1:(param_dim-1)) {
     theme_bw() + 
     theme(axis.title = element_blank(), axis.text = element_text(size = 18)) +                               # Assign pretty axis ticks
     scale_x_continuous(breaks = scales::pretty_breaks(n = 2)) 
-  # theme(legend.position="bottom") + 
-  # scale_color_manual(values = c('RVGA' = 'red', 'HMC' = 'blue'))
-  
+
   plots[[p]] <- plot  
 }
 

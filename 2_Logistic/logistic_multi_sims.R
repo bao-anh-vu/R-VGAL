@@ -1,4 +1,4 @@
-setwd("~/R-VGAL/2_Logistic/")
+# setwd("~/R-VGAL/2_Logistic/")
 
 ## Structure of the code:
 ## 1. Regenerate data
@@ -45,8 +45,8 @@ source("./source/run_stan_logmm.R")
 
 date <- "20231017"
 regenerate_data <- F
-rerun_rvgal_sims <- F
-rerun_hmc_sims <- F
+rerun_rvgal_sims <- T
+rerun_hmc_sims <- T
 reorder_data <- F
 use_tempering <- T
 use_log_tau2 <- F # for reporting diagnostics

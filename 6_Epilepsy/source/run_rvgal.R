@@ -9,7 +9,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
     temper_schedule <- 1
   }
   
-  print("Starting R-VGA...")
+  print("Starting R-VGAL...")
   t1 <- proc.time()
   
   n_fixed_effects <- as.integer(ncol(X[[1]]))
@@ -28,10 +28,10 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
   
   for (i in 1:N) {
     
-    cat("i = ", i, "\n")
+    # cat("i = ", i, "\n")
     
     # if (S >= 500 && S_alpha >= 500) {
-    gc()
+    # gc()
     # }
     
     a_vals <- 1 # for tempering
@@ -150,6 +150,7 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
             
             ## Gradients of p(y_i, alpha_i^(s) | beta, zeta^(s)) from Tan and Nott
             grad_beta_l[[s]] <- t(y[[i]] - exp(X[[i]] %*% beta_l + Z[[i]] %*% alpha_l_s)) %*% X[[i]] #- 1/prior_var_beta * beta_l
+            
             # ## gradient of zeta from Tan and Nott
             # I_zeta <- L #diag(alpha_l_s)
             # I_zeta[lower.tri(I_zeta)] <- 1
@@ -395,13 +396,6 @@ to_triangular <- function (x, d) { ## for stan
   }
   
   return (L)
-  # for (int i = 1; i < K; ++i) {
-  #   for (int j = 1; j <= i; ++j) {
-  #     y[i, j] = y_basis[pos];
-  #     pos += 1;
-  #   }
-  # }
-  # return y;
 }
 
 poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) { 
@@ -427,12 +421,6 @@ poisson_joint_likelihood <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   for (s in 1:S_alpha) {
     alpha_i_s <- alpha_i[s, ]
     
-    # llh_y_i_s <- c()
-    # for (j in 1:length(y_i)) {
-    #   lambda_ij <- exp(X_i[j, ] %*% beta + Z_i[j, ] %*% alpha_i_s) #vectorise this!
-    #   # llh_y_i[j] <- y_i[j] * log(lambda_ij) - lambda_ij - log(factorial(y_i[j]))
-    #   llh_y_i_s[j] <- dpois(y_i[j], lambda_ij, log = T)
-    # }
     lambda_i <- exp(X_i %*% beta + Z_i %*% alpha_i_s)
     llh_y_i_s <- dpois(y_i, lambda_i, log = T)
     llh_y_i_s <- sum(llh_y_i_s)

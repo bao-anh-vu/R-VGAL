@@ -1,4 +1,4 @@
-setwd("~/R-VGAL/2_Logistic/")
+# setwd("~/R-VGAL/2_Logistic/")
 
 # Structure:
 # 1. Generate data
@@ -7,21 +7,6 @@ setwd("~/R-VGAL/2_Logistic/")
 # 4. Plot results
 
 rm(list=ls())
-
-# reticulate::use_condaenv("tf2.11", required = TRUE)
-library("dplyr")
-library("tensorflow")
-library("mvtnorm")
-library("rstan")
-library("gridExtra")
-library("grid")
-library("gtable")
-library(coda)
-
-source("./source/run_rvgal.R")
-source("./source/run_stan_logmm.R")
-source("./source/generate_data.R")
-
 ## Flags
 date <- "20231201" #"20230329"  
 regenerate_data <- F
@@ -30,9 +15,46 @@ rerun_stan <- T
 save_data <- F
 save_rvga_results <- F
 save_hmc_results <- F
-save_plots <- T
+save_plots <- F
 reorder_data <- F
 use_tempering <- T
+
+## Load packages
+# reticulate::use_condaenv("tf2.11", required = TRUE)
+library(dplyr)
+library(tensorflow)
+library(mvtnorm)
+library(rstan)
+library(gridExtra)
+library(grid)
+library(gtable)
+library(coda)
+
+library(tensorflow)
+
+# List physical devices
+gpus <- tf$config$experimental$list_physical_devices('GPU')
+
+if (length(gpus) > 0) {
+  tryCatch({
+    # Restrict TensorFlow to only allocate 4GB of memory on the first GPU
+    tf$config$experimental$set_virtual_device_configuration(
+      gpus[[1]],
+      list(tf$config$experimental$VirtualDeviceConfiguration(memory_limit=4096))
+    )
+    
+    logical_gpus <- tf$config$experimental$list_logical_devices('GPU')
+    
+    print(paste0(length(gpus), " Physical GPUs,", length(logical_gpus), " Logical GPUs"))
+  }, error = function(e) {
+    # Virtual devices must be set before GPUs have been initialized
+    print(e)
+  })
+}
+
+source("./source/run_rvgal.R")
+source("./source/run_stan_logmm.R")
+source("./source/generate_data.R")
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -41,8 +63,11 @@ if (use_tempering) {
 
 n_post_samples <- 20000
 
-## Generate data
-N <- 5000L #number of individuals
+#############################
+##    1. Generate data     ##
+#############################
+
+N <- 500L #number of individuals
 n <- 10L # number of responses per individual
 beta <- c(-1.5, 1.5, 0.5, 0.25) 
 tau <- 0.9
@@ -85,11 +110,11 @@ omega_0 <- log(0.5^2)
 mu_0 <- c(beta_0, omega_0)
 P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 
-###################
-##     R-VGA     ##
-###################
-S <- 200L
-S_alpha <- 200L
+#######################
+##     2. R-VGAL     ##
+#######################
+S <- 100L
+S_alpha <- 100L
 
 ## Set up result directory
 if (use_tempering) {
@@ -123,9 +148,9 @@ if (rerun_rvgal) {
   rvga_results <- readRDS(file = paste0(result_directory, results_file))
 }
 
-########################
-##        STAN        ##
-########################
+##########################
+##        3. HMC        ##
+##########################
 burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
@@ -156,7 +181,10 @@ if (rerun_stan) {
 hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
 hmc.n_eff <- hmc_results$n_eff
 hmc.Rhat <- hmc_results$Rhat
-######################## Results #########################
+
+####################################
+##            Results             ##
+####################################
 
 rvgal.post_samples <- matrix(NA, nrow = n_post_samples, ncol = param_dim)
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
@@ -176,10 +204,7 @@ rvgal.post_mean <- as.vector(apply(rvgal.post_samples, 2, mean))
 rvgal.post_sd <- as.vector(apply(rvgal.post_samples, 2, sd))
 hmc.post_mean <- as.vector(apply(hmc.samples, 2, mean))
 hmc.post_sd <- as.vector(apply(hmc.samples, 2, sd))
-# dens <- stan_dens(hfit, pars = c("beta[1]","beta[2]","beta[3]","beta[4]")) #, "sigma"))
-# dens <- dens + ggtitle ("HMC posteriors") 
-# print(dens)
-# 
+
 # traceplot(hfit, c("beta[1]","beta[2]","beta[3]","beta[4]"),
 #           ncol=1,nrow=5,inc_warmup=F)
 

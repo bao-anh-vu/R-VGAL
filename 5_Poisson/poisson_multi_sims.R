@@ -51,7 +51,7 @@ source("./source/compute_grad_hessian_theoretical.R")
 source("./source/run_multi_sims_hmc.R")
 
 ## Flags
-date <- "20231018" #"20231018" #"20231018" has 2 fixed effects, ""20231030" has 4    
+date <- "20231018" 
 regenerate_data <- F
 rerun_rvgal_sims <- F
 rerun_hmc_sims <- F
@@ -87,28 +87,14 @@ Sigma_alpha <- 0
 if (grepl("_0", date)) {
   Sigma_alpha <- 0.1*diag(1:n_random_effects)
 } else {
-  # L <- matrix(0, n_random_effects, n_random_effects)
-  # L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
-  # Sigma_alpha <- tcrossprod(L)
-  # Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
   Sigma_alpha <- matrix(c(0.5, 0.15, 0.15, 0.3), 2, 2)
 }
 n_fixed_effects <- length(beta)
 param_dim <- n_fixed_effects + n_random_effects * (n_random_effects+1)/2
 
-# if (grepl("_0", date)) {
-#   Sigma_alpha <- 0.1*diag(1:n_random_effects)
-# } else {
-#   L <- matrix(0, n_random_effects, n_random_effects)
-#   L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
-#   Sigma_alpha <- tcrossprod(L)
-#   Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
-# }
-
 if (regenerate_data) {
   print("Generating data...")
   for (sim in 1:nsims) {
-  # for (sim in c(28)) {
     datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, 
                                      Sigma_alpha = Sigma_alpha)
     if (save_datasets) {

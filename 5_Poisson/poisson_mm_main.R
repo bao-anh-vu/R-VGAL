@@ -1,4 +1,4 @@
-setwd("~/R-VGAL/5_Poisson/")
+# setwd("~/R-VGAL/5_Poisson/")
 ## Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
@@ -7,6 +7,19 @@ setwd("~/R-VGAL/5_Poisson/")
 
 rm(list=ls())
 
+## Flags
+date <- "20231018" #"20231201"     
+regenerate_data <- F
+rerun_rvgal <- T
+rerun_stan <- T
+save_data <- F
+save_rvgal_results <- F
+save_hmc_results <- F
+plot_prior <- F
+save_plots <- F
+reorder_data <- F
+use_tempering <- T
+plot_trace <- F
 use_tensorflow <- T
 
 if (use_tensorflow) {
@@ -37,16 +50,16 @@ if (use_tensorflow) {
   
 }
 
-library("dplyr")
-library("mvtnorm")
-library("rstan")
-library("gridExtra")
-library("grid")
-library("gtable")
+## Load packages
+library(dplyr)
+library(mvtnorm)
+library(rstan)
+library(gridExtra)
+library(grid)
+library(gtable)
 library(Matrix)
 library(coda)
 library(matrixcalc)
-
 
 source("./source/run_rvgal.R")
 source("./source/run_stan_poisson.R")
@@ -55,21 +68,6 @@ source("./source/generate_data2.R")
 # source("./source/compute_joint_llh_tf.R")
 # source("./source/compute_grad_hessian_all.R")
 source("./source/compute_grad_hessian_theoretical.R")
-
-## Flags
-date <- "20231201" #"20231018"   "20231203" # #"20231116" #has 2 fixed effects, ""20231030" has 4    
-regenerate_data <- F
-rerun_rvga <- F
-rerun_stan <- F
-save_data <- F
-save_rvgal_results <- F
-save_hmc_results <- F
-plot_prior <- F
-save_plots <- F
-reorder_data <- F
-use_tempering <- T
-
-plot_trace <- F
 
 if (use_tempering) {
   n_obs_to_temper <- 10
@@ -80,9 +78,12 @@ if (use_tempering) {
 n_post_samples <- 20000
 n_random_effects <- 2
 
-## Generate data
+###############################
+##       Generate data       ##
+###############################
+
 set.seed(2023)
-N <- 500L #number of individuals
+N <- 200L #number of individuals
 n <- 10L # number of responses per individual
 
 beta <- 0
@@ -148,9 +149,9 @@ if (reorder_data) {
 
 hist(unlist(y))
 
-####################
-##     R-VGAL     ##
-####################
+############################
+##     Initial setup      ##
+############################
 S <- 200L
 S_alpha <- 200L
 
@@ -233,11 +234,11 @@ if (plot_prior) {
 }
 
 
-#################
-##     R-VGA   ##
-#################
+####################
+##     R-VGAL     ##
+####################
 
-if (rerun_rvga) {
+if (rerun_rvgal) {
   rvgal_results <- run_rvgal(y, X, Z, mu_0, P_0, 
                              S = S, S_alpha = S_alpha,
                              n_post_samples = n_post_samples,
@@ -256,11 +257,12 @@ if (rerun_rvga) {
 
 rvgal.post_samples <- rvgal_results$post_samples
 
-# ########################
-# ##        STAN        ##
-# ########################
+########################
+##        STAN        ##
+########################
+
 burn_in <- 5000
-n_chains <- 1#2
+n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
 
 if (rerun_stan) {
@@ -439,6 +441,5 @@ hmc.time <- sum(colSums(hmc_results$time)) # sum over all chains
 rvga.time <- rvgal_results$time_elapsed
 cat("HMC time:", hmc.time, ", R-VGAL time:", rvga.time[3], "\n")
 
-
-gc()
-tf$keras$backend$clear_session()
+# gc()
+# tf$keras$backend$clear_session()

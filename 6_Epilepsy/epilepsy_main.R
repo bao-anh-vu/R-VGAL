@@ -1,26 +1,10 @@
-setwd("~/R-VGAL/7_Epilepsy")
+# setwd("~/R-VGAL/6_Epilepsy")
 
 rm(list=ls())
 
-library(HSAUR3) # for the dataset
-library(dplyr)
-library(mvtnorm)
-library(rstan)
-library(gridExtra)
-library(grid)
-library(gtable)
-library(Matrix)
-library(coda)
-library(matrixcalc)
-
-source("./source/run_rvgal.R")
-source("./source/run_stan_poisson.R")
-# source("./source/compute_grad_hessian_all.R")
-source("./source/compute_grad_hessian_theoretical.R")
-
 ## Flags
 date <- "20231018" #"20231018_interact" # has 2 fixed effects, ""20231030" has 4    
-rerun_rvga <- F
+rerun_rvgal <- T
 rerun_stan <- F
 save_rvgal_results <- F
 save_hmc_results <- F
@@ -32,6 +16,8 @@ plot_prior <- F
 save_plots <- F
 
 use_tensorflow <- T
+
+## Load packages
 if (use_tensorflow) {
   library("tensorflow")
   tfp <- import("tensorflow_probability")
@@ -59,13 +45,32 @@ if (use_tensorflow) {
   }
 }
 
+library(HSAUR3) # for the dataset
+library(dplyr)
+library(mvtnorm)
+library(rstan)
+library(gridExtra)
+library(grid)
+library(gtable)
+library(Matrix)
+library(coda)
+library(matrixcalc)
+
+source("./source/run_rvgal.R")
+source("./source/run_stan_poisson.R")
+# source("./source/compute_grad_hessian_all.R")
+source("./source/compute_grad_hessian_theoretical.R")
+
 if (use_tempering) {
   n_obs_to_temper <- 10
   K <- 4
   a_vals_temper <- rep(1/K, K)
 }
 
-## Read data
+########################
+##    1. Read data    ##
+########################
+
 data(epilepsy)
 head(epilepsy)
 epilepsy$treatment <- ifelse(epilepsy$treatment == "Progabide", 1, 0)
@@ -144,9 +149,9 @@ if (reorder_data) {
 
 hist(unlist(y))
 
-###################
-##     R-VGA     ##
-###################
+######################
+##     2. R-VGA     ##
+######################
 n_post_samples <- 20000
 S <- 200L
 S_alpha <- 200L
@@ -179,7 +184,7 @@ l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effec
 mu_0 <- c(beta_0, l_vec_0)
 P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
 
-if (rerun_rvga) {
+if (rerun_rvgal) {
   rvgal_results <- run_rvgal(y, X, Z, mu_0, P_0, 
                              S = S, S_alpha = S_alpha,
                              n_post_samples = n_post_samples,
@@ -199,9 +204,9 @@ if (rerun_rvga) {
 
 rvgal.post_samples <- rvgal_results$post_samples
 
-# ########################
-# ##        STAN        ##
-# ########################
+##########################
+##        3. HMC        ##
+##########################
 burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
@@ -230,20 +235,14 @@ if (rerun_stan) {
   
 }
 
-# param_names <- c("beta[1]","beta[2]", "Sigma_alpha[1,1]", 
-#                  "Sigma_alpha[2,1]",
-#                  "Sigma_alpha[2,2]", "Sigma_alpha[3,1]",
-#                  "Sigma_alpha[3,2]", "Sigma_alpha[3,3]")
-# 
-# hmc.fit <- extract(hfit, pars = param_names,
-#                    permuted = F, inc_warmup = F)
-
 hmc.fit <- hmc_results$post_samples[-(1:burn_in),,]
 hmc.summ <- hmc_results$summary
 hmc.n_eff <- hmc_results$n_eff
 hmc.Rhat <- hmc_results$Rhat
 
-######################## Results #########################
+###########################
+##        Results        ##
+###########################
 
 # rvgal.post_samples <- matrix(NA, nrow = n_post_samples, ncol = param_dim)
 hmc.samples <- matrix(NA, n_post_samples, param_dim)
@@ -265,15 +264,7 @@ if (grepl("interact", date)) {
 fixed_ef_labels <- sapply(1:n_fixed_effects, function(x) paste0("beta[", fixed_ef_names[x], "]"))
 param_names <- c(fixed_ef_labels, "sigma_alpha[11]", "sigma_alpha[21]", "sigma_alpha[22]")  
 
-
-# par(mfrow = c(n_random_effects, ceiling(param_dim/n_random_effects)))
-# for (p in 1:param_dim) {
-#   plot(density(hmc.samples[, p]), main = param_names[p])
-#   lines(density(rvgal.post_samples[, p]), col = "red")
-#   abline(v = true_vals[p], lty = 2)
-# }
-
-## ggplot version
+## ggplot 
 
 rvgal.df <- data.frame(beta = rvgal.post_samples) 
 hmc.df <- data.frame(beta = hmc.samples)

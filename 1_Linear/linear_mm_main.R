@@ -1,4 +1,4 @@
-setwd("~/R-VGAL/1_Linear/")
+# setwd("~/R-VGAL/1_Linear/")
 
 ## Structure of the code:
 ## 1. Regenerate data
@@ -7,6 +7,23 @@ setwd("~/R-VGAL/1_Linear/")
 ## 4. Run HMC 
 
 rm(list = ls())
+
+## Flags
+date <- "20230329"
+regenerate_data <- F
+rerun_est_rvgal <- T
+rerun_exact_rvgal <- T
+rerun_hmc <- T
+reorder_data <- F
+use_tempering <- T
+
+save_data <- F
+save_est_rvgal_results <- F
+save_exact_rvgal_results <- F
+save_hmc_results <- F
+save_plots <- F
+
+## Load necessary packages
 
 library("tensorflow")
 
@@ -30,8 +47,6 @@ if (length(gpus) > 0) {
   })
 }
 
-
-
 library("mvtnorm")
 library("Matrix")
 library("rstan")
@@ -46,20 +61,6 @@ source("./source/run_exact_rvgal.R")
 # source("./source/run_finite_difference.R") # to calculate numerical gradients/Hessians for comparison with theoretical ones
 source("./source/run_stan_lmm.R")
 
-date <- "20230329"
-regenerate_data <- F
-rerun_est_rvgal <- T
-rerun_exact_rvgal <- T
-rerun_hmc <- T
-reorder_data <- F
-use_tempering <- T
-
-save_data <- F
-save_est_rvgal_results <- F
-save_exact_rvgal_results <- F
-save_hmc_results <- F
-save_plots <- F
-
 if (use_tempering) {
   n_obs_to_temper <- 10
   a_vals_temper <- rep(1/4, 4)
@@ -71,7 +72,10 @@ S <- 100L
 S_alpha <- 100L
 n_post_samples <- 20000
 
-## 1. Generate data
+####################################
+##        1. Generate data        ##
+####################################
+
 if (regenerate_data) {
   ## True parameters
   sigma_a <- 0.9
@@ -128,9 +132,9 @@ par(mfrow = c(1, 2))
 plot(density(sigma_a_samples), main = "Prior density of sigma_a")
 plot(density(sigma_e_samples), main = "Prior density of sigma_e")
 
-# browser()
-
-## 2. Run R-VGAL with estimated gradients/Hessians
+##########################################################
+##    2. Run R-VGAL with estimated gradients/Hessians   ##
+##########################################################
 
 ## Set up result directory
 if (use_tempering) {
@@ -163,8 +167,10 @@ if (rerun_est_rvgal) {
   est_rvgal_results <- readRDS(file = paste0(result_directory, est_results_file))
 }
 
+############################################################
+##    3. Run R-VGAL with theoretical gradients/Hessians   ##
+############################################################
 
-# ## 3. Run R-VGAL with theoretical gradients/Hessians
 exact_results_file <- paste0("linear_mm_rvga", temper_info, reorder_info,
                              "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, ".rds")
 
@@ -184,7 +190,10 @@ if (rerun_exact_rvgal) {
   exact_rvgal_results <- readRDS(file = paste0(result_directory, exact_results_file))
 }
 
-## 4. Run HMC 
+##############################
+##        4. Run HMC        ## 
+##############################
+
 burn_in <- 5000
 n_chains <- 2
 hmc.iters <- n_post_samples/n_chains + burn_in
@@ -220,15 +229,6 @@ hmc.samples <- matrix(NA, n_post_samples, param_dim)
 
 for (p in 1:param_dim) {
   
-  ## Extract R-VGAL samples
-  # if (p == (param_dim - 1) || p == param_dim) { # if the parameters are variance parameters
-  #   est_rvgal.post_samples[, p] <- sqrt(exp(est_rvgal_results$post_samples[, p])) # then back-transform
-  #   exact_rvgal.post_samples[, p] <- sqrt(exp(exact_rvgal_results$post_samples[, p]))
-  #   # hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
-  # } else {
-  #   
-  # }
-  
   est_rvgal.post_samples[, p] <- est_rvgal_results$post_samples[, p]
   exact_rvgal.post_samples[, p] <- exact_rvgal_results$post_samples[, p]
   
@@ -263,8 +263,6 @@ param_values <- c(beta, sigma_a, sigma_e)
 
 plots <- list()
 
-################## Dev ###############
-
 for (p in 1:param_dim) {
   
   true_vals.df <- data.frame(name = param_names[p], val = param_values[p])
@@ -285,7 +283,6 @@ for (p in 1:param_dim) {
   
   plots[[p]] <- plot  
 }
-
 
 ## Arrange bivariate plots in lower off-diagonals
 n_lower_tri <- (param_dim^2 - param_dim)/2 # number of lower triangular elements
@@ -358,12 +355,6 @@ if (save_plots) {
   grid.draw(gp)
   dev.off()
 } 
-
-###
-# par(mfrow = c(1,1))
-# plot(density(sigma_a_samples), main = "Prior density of sigma_a")
-# lines(density(est_rvgal.df$sigma_a), col = "red")
-# legend("topright", legend = c("Prior", "Posterior"), col = c("black", "red"), lty = 1)
 
 ## Time benchmark
 hmc.time <- sum(colSums(hfit$time)) # sum over all chains

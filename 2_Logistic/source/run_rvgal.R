@@ -10,7 +10,7 @@ run_rvgal <- function(y, X, mu_0, P_0, S = 100L, S_alpha = 100L,
     temper_schedule <- 1
   }
   
-  print("Starting R-VGA...")
+  print("Starting R-VGAL...")
   t1 <- proc.time()
   
   # n_fixed_effects <- as.integer(ncol(X[[1]]))
