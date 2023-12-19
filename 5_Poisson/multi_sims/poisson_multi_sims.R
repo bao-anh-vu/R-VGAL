@@ -1,4 +1,4 @@
-# setwd("/home/babv971/R-VGAL/5_Poisson/")
+setwd("/home/babv971/R-VGAL/5_Poisson/")
 ## Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
@@ -59,7 +59,7 @@ save_datasets <- F
 save_rvgal_sim_results <- F
 save_hmc_sim_results <- F
 plot_prior <- F
-save_plots <- T
+save_plots <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -136,7 +136,7 @@ error_inds <- c()
 
 print("Starting R-VGAL simulations...")
 for (sim in 1:nsims) {
-# for (sim in c(83)) {
+# for (sim in c(63)) {
     
   skip_to_next <- FALSE
   
