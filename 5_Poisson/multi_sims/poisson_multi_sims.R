@@ -51,9 +51,9 @@ source("./source/compute_grad_hessian_theoretical.R")
 source("./source/run_multi_sims_hmc.R")
 
 ## Flags
-date <- "20231018" 
+date <- "20231220" #"20231018" 
 regenerate_data <- F
-rerun_rvgal_sims <- F
+rerun_rvgal_sims <- T
 rerun_hmc_sims <- F
 save_datasets <- F
 save_rvgal_sim_results <- F
@@ -66,7 +66,7 @@ use_tempering <- T
 plot_trace <- F
 
 if (use_tempering) {
-  n_obs_to_temper <- 10
+  n_obs_to_temper <- 50
   K <- 4
   a_vals_temper <- rep(1/K, K)
 }
@@ -80,7 +80,7 @@ nsims <- 100
 ## Generate data
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-1.5, 1.25) 
+beta <- c(-0.5, 1.25) 
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
@@ -98,13 +98,15 @@ if (regenerate_data) {
     datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, 
                                      Sigma_alpha = Sigma_alpha)
     if (save_datasets) {
-      saveRDS(datasets[[sim]], file = paste0("./multi_sims/data/poisson_data_N", N, "_n", n, "_", date, "_",
+      saveRDS(datasets[[sim]], file = paste0("./multi_sims/data/", date, 
+                                             "/poisson_data_N", N, "_n", n, "_", date, "_",
                                              formatC(sim, width=3, flag="0"), ".rds"))
     }
   }
 } else {
   for (sim in 1:nsims) {
-    datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/poisson_data_N", N, "_n", n, "_", date, "_",
+    datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/", date, 
+                                             "/poisson_data_N", N, "_n", n, "_", date, "_",
                                              formatC(sim, width=3, flag="0"), ".rds"))
   }
 }
@@ -121,7 +123,7 @@ if (reorder_data) {
 } else {
   reorder_info <- ""
 }
-result_directory <- "./multi_sims/results/"
+result_directory <- paste0("./multi_sims/results/", date, "/")
 
 ####################
 ##     R-VGAL     ##
@@ -131,12 +133,26 @@ S <- 200L
 S_alpha <- 200L
 
 rvgal_sim_results <- list()
+# error_inds <- c()
+# error_inds <- c(17, 26, 31, 34, 51, 57, 74, 88, 90, 96)
+# error_inds <- c(31, 34)
+error_inds <- c(59)
 
-error_inds <- c()
+# error_inds <- readRDS(paste0(result_directory, "/error_inds.rds"))
+# for (sim in 1:nsims) {
+#   rvgal.result_file <- paste0("poisson_rvgal", temper_info, reorder_info,
+#                               "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, "_",
+#                               formatC(sim, width=3, flag="0"), ".rds")
+#   saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
+#   
+#   if (is.null(rvgal_sim_results[[sim]])) {
+#     error_inds <- c(error_inds, sim)
+#   }
+# }
 
 print("Starting R-VGAL simulations...")
-for (sim in 1:nsims) {
-# for (sim in c(63)) {
+# for (sim in 1:nsims) {
+for (sim in error_inds) {
     
   skip_to_next <- FALSE
   
@@ -214,22 +230,38 @@ n_chains <- 2
 
 if (rerun_hmc_sims) {
   
-  sims <- 28:28
-  parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 40L,
+  
+  sims <- 1:nsims
+  hmc_sim_results <- parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 50L,
+                     date = date, 
                      n_post_samples = n_post_samples,
                      burn_in = burn_in)
-  # lapply(sims, run_multi_sims_hmc, n_post_samples = n_post_samples,
-  #        burn_in = burn_in) #, mc.cores = 10L)
+  # hmc_sim_results <- lapply(sims, run_multi_sims_hmc, 
+  #                           date = date,
+  #                           n_post_samples = n_post_samples,
+  #                           burn_in = burn_in) #, mc.cores = 10L)
+  
+  # for (sim in 1:nsims) {
+  #   hmc.result_file <- paste0(result_directory, 
+  #                             "poisson_hmc_N", N, "_n", n, "_", date, "_",
+  #                             formatC(sim, width=3, flag="0"), ".rds")
+  #   
+  #   if (save_hmc_sim_results) {
+  #     saveRDS(hmc_sim_results[[sim]], hmc.result_file)
+  #   }
+  #   
+  # }
   
 } 
 
 for (sim in 1:nsims) {
-  hmc.result_file <- paste0(result_directory, 
-                            "poisson_hmc_N", N, "_n", n, "_", "20231018", "_",
+  hmc.result_file <- paste0(result_directory,
+                            "poisson_hmc_N", N, "_n", n, "_", date, "_",
                             formatC(sim, width=3, flag="0"), ".rds")
   
   hmc_sim_results[[sim]] <- readRDS(file = hmc.result_file)
 }
+
 
 # }
 

@@ -149,6 +149,8 @@ if (reorder_data) {
 
 hist(unlist(y))
 
+browser()
+
 ############################
 ##     Initial setup      ##
 ############################

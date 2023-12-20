@@ -1,16 +1,15 @@
-run_multi_sims_hmc <- function(nsims, n_post_samples = 2000, 
+run_multi_sims_hmc <- function(nsims, date, n_post_samples = 2000, 
                                burn_in = 5000, n_chains = 2) {
-  date <- "20231018"
-  N <- 200L
-  n <- 10L
+  # date <- "20231018"
   
   hmc.iters <- n_post_samples/n_chains + burn_in
-
-  result_directory <- "./multi_sims/results/"
+  
+  result_directory <- paste0("./multi_sims/results/", date, "/")
   
   # Read data
   for (sim in 1:nsims) {
-    datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/poisson_data_N", N, "_n", n, "_", date, "_",
+    datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/", date, 
+                                             "/poisson_data_N", N, "_n", n, "_", date, "_",
                                              formatC(sim, width=3, flag="0"), ".rds"))
   }
   
@@ -19,6 +18,9 @@ run_multi_sims_hmc <- function(nsims, n_post_samples = 2000,
   y <- poisson_data$y
   X <- poisson_data$X
   Z <- poisson_data$Z
+  
+  N <- length(y)
+  n <- length(y[[1]])
   
   beta <- poisson_data$beta
   Sigma_alpha <- poisson_data$Sigma_alpha
@@ -48,12 +50,12 @@ run_multi_sims_hmc <- function(nsims, n_post_samples = 2000,
   cat("Sim", sim, "in progress... \n")
   
   hmc_sim_result <- run_stan_poisson(iters = hmc.iters, burn_in = burn_in,
-                                  n_chains = n_chains, data = y_long,
-                                  grouping = rep(1:N, each = n), n_groups = N,
-                                  fixed_covariates = X_long,
-                                  rand_covariates = Z_long,
-                                  prior_mean = mu_0,
-                                  prior_var = P_0)
+                                     n_chains = n_chains, data = y_long,
+                                     grouping = rep(1:N, each = n), n_groups = N,
+                                     fixed_covariates = X_long,
+                                     rand_covariates = Z_long,
+                                     prior_mean = mu_0,
+                                     prior_var = P_0)
   
   ## Save results
   saveRDS(hmc_sim_result, file = hmc.result_file)
