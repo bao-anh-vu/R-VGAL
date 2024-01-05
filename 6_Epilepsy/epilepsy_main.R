@@ -4,7 +4,7 @@ rm(list=ls())
 
 ## Flags
 date <- "20231018" #"20231018_interact" # has 2 fixed effects, ""20231030" has 4    
-rerun_rvgal <- T
+rerun_rvgal <- F
 rerun_stan <- F
 save_rvgal_results <- F
 save_hmc_results <- F
@@ -13,9 +13,9 @@ use_tempering <- T
 
 plot_trace <- F
 plot_prior <- F
-save_plots <- F
+save_plots <- T
 
-use_tensorflow <- T
+use_tensorflow <- F
 
 ## Load packages
 if (use_tensorflow) {
@@ -49,6 +49,7 @@ library(HSAUR3) # for the dataset
 library(dplyr)
 library(mvtnorm)
 library(rstan)
+library(ggplot2)
 library(gridExtra)
 library(grid)
 library(gtable)
@@ -256,9 +257,9 @@ for (p in 1:param_dim) {
 }
 
 if (grepl("interact", date)) {
-  fixed_ef_names <- c("1", "treatment", "base", "base_treat", "age", "visit")
+  fixed_ef_names <- c("0", "treatment", "base", "base_treat", "age", "visit")
 } else {
-  fixed_ef_names <- c("1", "treatment", "base", "age", "visit")
+  fixed_ef_names <- c("0", "treatment", "base", "age", "visit")
 }
 
 fixed_ef_labels <- sapply(1:n_fixed_effects, function(x) paste0("beta[", fixed_ef_names[x], "]"))

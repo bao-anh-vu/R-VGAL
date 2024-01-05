@@ -7,11 +7,15 @@ setwd("/home/babv971/R-VGAL/5_Poisson/")
 
 rm(list=ls())
 
-library("tensorflow")
-tfp <- import("tensorflow_probability")
-tfd <- tfp$distributions
-library(parallel)
 library(keras)
+library("tensorflow")
+# library(reticulate)
+# reticulate::use_condaenv("tf2.11", required = TRUE)
+# library(tfprobability)
+# tfp <- import("tensorflow_probability")
+# tfd <- tfp$distributions
+library(parallel)
+
 library("dplyr")
 library("mvtnorm")
 library("rstan")
@@ -51,22 +55,22 @@ source("./source/compute_grad_hessian_theoretical.R")
 source("./source/run_multi_sims_hmc.R")
 
 ## Flags
-date <- "20231220" #"20231018" 
+date <- "20231224" #"20231223"# #1223 is the good one 
 regenerate_data <- F
 rerun_rvgal_sims <- T
 rerun_hmc_sims <- F
 save_datasets <- F
-save_rvgal_sim_results <- F
+save_rvgal_sim_results <- T
 save_hmc_sim_results <- F
 plot_prior <- F
-save_plots <- F
+save_plots <- T
 reorder_data <- F
 use_tempering <- T
 
 plot_trace <- F
 
 if (use_tempering) {
-  n_obs_to_temper <- 50
+  n_obs_to_temper <- 1:10
   K <- 4
   a_vals_temper <- rep(1/K, K)
 }
@@ -80,23 +84,28 @@ nsims <- 100
 ## Generate data
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
-beta <- c(-0.5, 1.25) 
+beta <- c(-1.5, -0.5) 
 nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
 
 Sigma_alpha <- 0
 if (grepl("_0", date)) {
   Sigma_alpha <- 0.1*diag(1:n_random_effects)
 } else {
-  Sigma_alpha <- matrix(c(0.5, 0.15, 0.15, 0.3), 2, 2)
+  Sigma_alpha <- matrix(c(0.15, 0.05, 0.05, 0.2), 2, 2)
+  # Sigma_alpha <- matrix(c(0.16, 0.05, 0.05, 0.25), 2, 2)
 }
 n_fixed_effects <- length(beta)
 param_dim <- n_fixed_effects + n_random_effects * (n_random_effects+1)/2
 
+lambda_list <- list()
 if (regenerate_data) {
   print("Generating data...")
   for (sim in 1:nsims) {
     datasets[[sim]] <- generate_data(N = N, n = n, beta = beta, 
-                                     Sigma_alpha = Sigma_alpha)
+                                     Sigma_alpha = Sigma_alpha,
+                                     use_intercept = F)
+    
+    # lambda_list[[sim]] <- unlist(datasets[[sim]]$lambda)
     if (save_datasets) {
       saveRDS(datasets[[sim]], file = paste0("./multi_sims/data/", date, 
                                              "/poisson_data_N", N, "_n", n, "_", date, "_",
@@ -108,12 +117,13 @@ if (regenerate_data) {
     datasets[[sim]] <- readRDS(file = paste0("./multi_sims/data/", date, 
                                              "/poisson_data_N", N, "_n", n, "_", date, "_",
                                              formatC(sim, width=3, flag="0"), ".rds"))
+    # lambda_list[[sim]] <- unlist(datasets[[sim]]$lambda)
   }
 }
 
 ## Set up result directory
 if (use_tempering) {
-  temper_info <- paste0("_temper", n_obs_to_temper)
+  temper_info <- paste0("_temper", max(n_obs_to_temper))
 } else {
   temper_info <- ""
 }
@@ -125,18 +135,47 @@ if (reorder_data) {
 }
 result_directory <- paste0("./multi_sims/results/", date, "/")
 
+
+test <- sapply(datasets, function(x) unlist(x$y))
+hist(test)
+# head(sort(test, decreasing = T))
+# all_lambda <- unlist(lambda_list)
+# hist(all_lambda)
+# 
+# sim_test <- ceiling(which.max(test)/2000)
+# ind <- ceiling(which.max(lambda_list[[sim_test]])/10)
+# X_test <- datasets[[sim_test]]$X[[ind]]
+# Z_test <- datasets[[sim_test]]$Z[[ind]]
+# alpha_test <- datasets[[sim_test]]$alpha[[ind]]
+# exp(X_test %*% beta + Z_test %*% alpha_test)
+
+
+# R <- 10000
+# za <- list()
+# Sigma_alpha_test <- matrix(c(0.16, 0.05, 0.05, 0.25), 2, 2)
+# for (r in 1:R) {
+#   z <- matrix(rnorm(n * 2), nrow = n, ncol = 2)
+#   alpha <- rmvnorm(1, c(0,0), Sigma_alpha_test)
+#   za[[r]] <- z %*% t(alpha)
+# }
+# hist(unlist(za))
+# sd(unlist(za))
+# browser()
+
+
 ####################
 ##     R-VGAL     ##
 ####################
 
-S <- 200L
-S_alpha <- 200L
+S <- 100L
+S_alpha <- 100L
 
 rvgal_sim_results <- list()
-# error_inds <- c()
+error_inds <- c()
 # error_inds <- c(17, 26, 31, 34, 51, 57, 74, 88, 90, 96)
 # error_inds <- c(31, 34)
-error_inds <- c(59)
+# error_inds <- c(59)
+sims_to_run <- 1:nsims #c(23, 32, 37) 
 
 # error_inds <- readRDS(paste0(result_directory, "/error_inds.rds"))
 # for (sim in 1:nsims) {
@@ -151,8 +190,7 @@ error_inds <- c(59)
 # }
 
 print("Starting R-VGAL simulations...")
-# for (sim in 1:nsims) {
-for (sim in error_inds) {
+for (sim in sims_to_run) {
     
   skip_to_next <- FALSE
   
@@ -191,14 +229,19 @@ for (sim in error_inds) {
     n_elements_L <- n_random_effects + n_random_effects * (n_random_effects - 1)/2
     param_dim <- n_fixed_effects + n_elements_L
     
+    # beta_0 <- rep(0, n_fixed_effects)
+    # l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
+    # mu_0 <- c(beta_0, l_vec_0)
+    # P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
+    
     beta_0 <- rep(0, n_fixed_effects)
-    l_vec_0 <- c(rep(0, n_random_effects), rep(0, n_random_effects * (n_random_effects - 1)/2))
+    l_vec_0 <- c(0, 0, 0)
     mu_0 <- c(beta_0, l_vec_0)
-    P_0 <- diag(c(rep(1, n_fixed_effects), rep(0.1, n_elements_L)))
+    P_0 <- diag(c(rep(1, n_fixed_effects), 0.1, 0.1, 0.1))
+    # P_0 <- diag(c(rep(1, n_fixed_effects), 0.01, 0.01, 0.1))
     
-    
-    tryCatch( 
-      expr = {
+    tryCatch(
+    expr = {
         rvgal_sim_results[[sim]] <- run_rvgal(y, X, Z, mu_0, P_0, 
                                               S = S, S_alpha = S_alpha,
                                               n_post_samples = n_post_samples,
@@ -210,11 +253,11 @@ for (sim in error_inds) {
         if (save_rvgal_sim_results) {
           saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
         }
-      }, 
-      error = function(e) { error_inds = c(error_inds, sim); skip_to_next <<- TRUE})
-    
-    if(skip_to_next) { next }  
-    
+    },
+    error = function(e) { error_inds = c(error_inds, sim); skip_to_next <<- TRUE})
+
+    if(skip_to_next) { next }
+
     saveRDS(error_inds, file = paste0(result_directory, "error_inds.rds"))
 
   } else {
@@ -265,7 +308,7 @@ for (sim in 1:nsims) {
 
 # }
 
-## R-VGA results
+## Plot results
 rvgal.sim_results_list <- list()
 hmc.sim_results_list <- list()
 for (sim in 1:nsims) {
@@ -301,7 +344,6 @@ hmc.sds_allparams <- lapply(hmc.sim_results_list, function(x) apply(x, 2, sd)) #
 rvgal.means_allparams <- lapply(rvgal.sim_results_list, colMeans) # parameter means for each sim
 rvgal.sds_allparams <- lapply(rvgal.sim_results_list, function(x) apply(x, 2, sd)) # parameter means for each sim
 
-
 par(mfrow = c(2, 3))
 for (p in 1:param_dim) {
   
@@ -330,7 +372,7 @@ means_df$rvgal_diff <- means_df$rvgal_mean - means_df$true_vals
 means_df$hmc_diff <- means_df$hmc_mean - means_df$true_vals
 means_df$sim <- rep(1:nsims, param_dim)
 
-sds_df <- data.frame(rvgal_sd = c(rvgal.means), hmc_sd = c(hmc.means))
+sds_df <- data.frame(rvgal_sd = c(rvgal.sds), hmc_sd = c(hmc.sds))
 sds_df$ratio <- sds_df$rvgal_sd / sds_df$hmc_sd
 sds_df$param <- rep(param_names, each = nsims)
 sds_df$sim <- rep(1:nsims, param_dim)

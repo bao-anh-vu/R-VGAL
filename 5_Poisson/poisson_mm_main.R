@@ -8,24 +8,29 @@
 rm(list=ls())
 
 ## Flags
-date <- "20231018" #"20231201"     
+date <- "20231224" #"20231018" #"20231201"
+
 regenerate_data <- F
-rerun_rvgal <- T
-rerun_stan <- T
+rerun_rvgal <- F
+rerun_stan <- F
+reorder_data <- F
+use_tempering <- T
+use_tensorflow <- T
+use_intercept <- T
+
+plot_prior <- F
+plot_trace <- F
+
 save_data <- F
 save_rvgal_results <- F
 save_hmc_results <- F
-plot_prior <- F
 save_plots <- F
-reorder_data <- F
-use_tempering <- T
-plot_trace <- F
-use_tensorflow <- T
 
 if (use_tensorflow) {
   library("tensorflow")
-  tfp <- import("tensorflow_probability")
-  tfd <- tfp$distributions
+  # library(tfprobability)
+  # tfp <- import("tensorflow_probability")
+  # tfd <- tfp$distributions
   library(keras)
   
   # List physical devices
@@ -64,7 +69,7 @@ library(matrixcalc)
 source("./source/run_rvgal.R")
 source("./source/run_stan_poisson.R")
 source("./source/generate_data.R")
-source("./source/generate_data2.R")
+# source("./source/generate_data2.R")
 # source("./source/compute_joint_llh_tf.R")
 # source("./source/compute_grad_hessian_all.R")
 source("./source/compute_grad_hessian_theoretical.R")
@@ -82,41 +87,58 @@ n_random_effects <- 2
 ##       Generate data       ##
 ###############################
 
-set.seed(2023)
+data_seed <- 2023
+
+N <- 200L #number of individuals
+n <- 10L # number of responses per individual
+beta <- c(-1.5, -0.5) 
+nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
+
+Sigma_alpha <- 0
+if (grepl("_0", date)) {
+  Sigma_alpha <- 0.1*diag(1:n_random_effects)
+} else {
+  Sigma_alpha <- matrix(c(0.15, 0.05, 0.05, 0.2), 2, 2)
+  # Sigma_alpha <- matrix(c(0.16, 0.05, 0.05, 0.25), 2, 2)
+}
+
 N <- 200L #number of individuals
 n <- 10L # number of responses per individual
 
-beta <- 0
-Sigma_alpha <- 0
-if (date == "20231116") {
-  beta <- c(6.56, -0.23, 0.58)
-  Sigma_alpha <- matrix(c(0.856959673, -0.008146311, -0.008146311, 0.005272048), 2, 2)
-} else {
-  beta <- c(-0.5, 1.25) 
-  nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
-  
-  Sigma_alpha <- 0
-  if (grepl("_0", date)) {
-    Sigma_alpha <- 0.1*diag(1:n_random_effects)
-  } else {
-    # L <- matrix(0, n_random_effects, n_random_effects)
-    # L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
-    # Sigma_alpha <- tcrossprod(L)
-    # Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
-    Sigma_alpha <- matrix(c(0.5, 0.15, 0.15, 0.3), 2, 2)
-  }
-}
+# beta <- 0
+# Sigma_alpha <- 0
+# if (date == "20231116") {
+#   beta <- c(6.56, -0.23, 0.58)
+#   Sigma_alpha <- matrix(c(0.856959673, -0.008146311, -0.008146311, 0.005272048), 2, 2)
+# } else {
+#   beta <- c(-0.5, 1.05) 
+#   nlower <- n_random_effects + n_random_effects * (n_random_effects-1)/2
+#   
+#   Sigma_alpha <- 0
+#   if (grepl("_0", date)) {
+#     Sigma_alpha <- 0.1*diag(1:n_random_effects)
+#   } else {
+#     # L <- matrix(0, n_random_effects, n_random_effects)
+#     # L[lower.tri(L, diag = T)] <- runif(nlower, 0, 1)
+#     # Sigma_alpha <- tcrossprod(L)
+#     # Sigma_alpha <- Sigma_alpha + 0.1*diag(1:n_random_effects)
+#     # Sigma_alpha <- matrix(c(0.5, 0.15, 0.15, 0.3), 2, 2)
+#     Sigma_alpha <- matrix(c(0.2, 0.15, 0.15, 0.35), 2, 2)
+#     # browser()
+#   }
+# }
 
 if (regenerate_data) {
-  if (date == "20231116") {
-    poisson_data <- generate_data2(N = N, n = n, beta = beta, 
-                                   Sigma_alpha = Sigma_alpha,
-                                   seed = 2023)
-  } else {
+  # if (date == "20231116") {
+  #   poisson_data <- generate_data2(N = N, n = n, beta = beta, 
+  #                                  Sigma_alpha = Sigma_alpha,
+  #                                  seed = 2023)
+  # } else {
     poisson_data <- generate_data(N = N, n = n, beta = beta, 
                                   Sigma_alpha = Sigma_alpha,
-                                  seed = 2023)
-  }
+                                  seed = data_seed,
+                                  use_intercept = use_intercept)
+  # }
   
   if (save_data) {
     saveRDS(poisson_data, file = paste0("./data/poisson_data_N", N, "_n", n, 
@@ -134,6 +156,12 @@ Z <- poisson_data$Z
 beta <- poisson_data$beta
 Sigma_alpha <- poisson_data$Sigma_alpha
 
+# if (any(X[[1]][, 1] != 1)) {
+#   use_intercept <- F
+# } else {
+#   use_intercept <- T
+# }
+#   
 ## Reorder data if needed
 reorder_seed <- 2024
 if (reorder_data) {
@@ -148,14 +176,11 @@ if (reorder_data) {
 }
 
 hist(unlist(y))
-
-browser()
-
 ############################
 ##     Initial setup      ##
 ############################
-S <- 200L
-S_alpha <- 200L
+S <- 100L
+S_alpha <- 100L
 
 ## Set up result directory
 if (use_tempering) {
@@ -312,7 +337,7 @@ for (p in 1:param_dim) {
 ##            Posterior plots             ##
 ############################################
 
-param_names <- c("beta[1]", "beta[2]", "sigma_alpha[11]", "sigma_alpha[21]", "sigma_alpha[22]")  
+param_names <- c("beta[0]", "beta[1]", "sigma_alpha[11]", "sigma_alpha[21]", "sigma_alpha[22]")  
 true_vals <- c(beta, c(Sigma_alpha[t(lower.tri(Sigma_alpha, diag = T))]))
 
 rvgal.df <- data.frame(beta = rvgal.post_samples) 
@@ -382,9 +407,10 @@ gr3 <- gtable_add_grob(gr2, grobs = lapply(plots, ggplotGrob), t = 1:param_dim, 
 # gtable_show_layout(gr3)
 
 # A list of text grobs - the labels
-vars <- list(textGrob(bquote(beta[1])), textGrob(bquote(beta[2])), 
+vars <- list(textGrob(bquote(beta[0])), textGrob(bquote(beta[1])), 
              textGrob(bquote(Sigma[alpha[11]])), textGrob(bquote(Sigma[alpha[21]])),
              textGrob(bquote(Sigma[alpha[22]])))
+
 vars <- lapply(vars, editGrob, gp = gpar(col = "black", fontsize = 20))
 
 # So that there is space for the labels,

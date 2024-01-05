@@ -112,20 +112,29 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
   y_i_reshape2 <- tf$reshape(y_i_tiled, c(1L, dim(y_i_tiled)))
   y_i_tiled2 <- tf$tile(y_i_reshape2, c(S, 1L, 1L, 1L))
   
-  pois <- tfd$Poisson(rate = lambda_i_tf)
+  # pois <- tfd$Poisson(rate = lambda_i_tf)
+  # # pois <- tfd_poisson(rate = lambda_i_tf)
+  # llh_y_i_tf_s <- pois$log_prob(y_i_tiled2)
   
-  llh_y_i_tf_s <- pois$log_prob(y_i_tiled2)
+  llh_y_i_tf_s <- tf$multiply(y_i_tiled, tf$math$log(lambda_i_tf)) - 
+                    lambda_i_tf - tf$math$lgamma(y_i_tiled + 1) 
   llh_y_i_tf <- tf$squeeze(tf$reduce_sum(llh_y_i_tf_s, 2L)) # should be size S x S_alpha
   
   if (n_random_effects == 1) {
     norm <- tfd$Normal(loc = 0, scale = L_tf_tiled)
+    # norm <- tfd_normal(loc = 0, scale = L_tf_tiled)
     llh_alpha_i_tf <- tf$squeeze(norm$log_prob(alpha_i_reshaped))
   } else {
-    norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
-    llh_alpha_i_tf <- norm$log_prob(alpha_i)
+    # norm <- tfd$MultivariateNormalTriL(loc = 0, scale_tril = L_tf_tiled)
+    # llh_alpha_i_tf <- norm$log_prob(alpha_i)
+    mat <- tf$linalg$matmul(tf$linalg$inv(L_tf_tiled), alpha_i_reshaped)
+    
+    llh_alpha_i_tf <- -1/2 * (2 * tf$reduce_sum(tf$math$log(tf$linalg$diag_part(L_tf_tiled)), 2L) + 
+                                tf$squeeze(tf$linalg$matmul(tf$linalg$matrix_transpose(mat), mat)) + 
+                                # tf$tile(tf$constant(log(2*pi)), c(S, S_alpha)))
+                                n_random_effects * log(2*pi))
   }
   # llh_alpha_i_og <- norm$log_prob(alpha_i_og)
-  
   log_likelihood_tf <- llh_y_i_tf + llh_alpha_i_tf
   # log_likelihood_tf <- llh_y_i_tf + tf$reshape(llh_alpha_i_tf, c(dim(llh_alpha_i_tf), 1L))
   
@@ -408,18 +417,18 @@ compute_joint_llh_tf2 <- function(y_i, X_i, Z_i, alpha_i, theta, S_alpha) {
 # reduce_retracing = T)
 
 # fill_lower_tri_tf <- tf_function(
-fill_lower_tri2 <- function(dim, vals) {
+fill_lower_tri2 <- function(dim, values) {
   
   
   d <- as.integer(dim)
-  S <- as.integer(nrow(vals))
-  # vals_tf <- tf$constant(vals, dtype = "float64")
+  S <- as.integer(nrow(values))
+  # vals <- tf$constant(vals, dtype = "float64")
   
-  diag_mat <- tf$linalg$diag(tf$exp(vals[, 1:d]))
+  diag_mat <- tf$linalg$diag(tf$exp(values[, 1:d]))
   # diag_mat_tiled <- tf$tile(diag_mat, c(S, 1L, 1L))
   
   nlower <- as.integer(d*(d-1)/2)
-  numlower = vals[, (d+1):(d+nlower)]
+  numlower = values[, (d+1):(d+nlower)]
   numlower = tf$reshape(numlower, c(S*nlower, 1L))
   numlower = tf$squeeze(numlower)
   
@@ -461,6 +470,7 @@ fill_lower_tri <- function(dim, vals) {
   S <- as.integer(nrow(vals))
   # vals_tf <- tf$constant(vals, dtype = "float64")
   # diag_mat <- tf$linalg$diag(tf$exp(vals[, 1:d]))
+  
   diag_mat <- tf$linalg$diag(vals[, 1:d])
   
   # diag_mat_tiled <- tf$tile(diag_mat, c(S, 1L, 1L))

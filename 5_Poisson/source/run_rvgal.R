@@ -37,13 +37,17 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
     
     a_vals <- 1 # for tempering
     if (use_tempering) {
-      if (i <= n_temper) { # only temper the first n_temper observations
-        # a_vals <- temper_schedule
-        Kseq <- round(seq(K, 1, length.out  = n_temper)) #seq(K, 0, length.out = n_temper+1)
-        K_i <- Kseq[i]
-        a_vals <- rep(1/K_i, K_i)
-        # browser()
-      }  
+      # if (i <= n_temper) { # only temper the first n_temper observations
+      #   # a_vals <- temper_schedule
+      #   Kseq <- round(seq(K, 1, length.out= n_temper)) #seq(K, 0, length.out = n_temper+1)
+      #   K_i <- Kseq[i]
+      #   a_vals <- rep(1/K_i, K_i)
+      #   # browser()
+      # }  
+      
+      if (i %in% n_temper) {
+        a_vals <- rep(1/K, K)
+      }
     }
     
     mu_temp <- mu_vals[[i]]
@@ -87,7 +91,6 @@ run_rvgal <- function(y, X, Z, mu_0, P_0, S = 100L, S_alpha = 100L,
       
         alpha_all_tf <- tf$Variable(alpha_all, dtype = "float64")
         theta_tf <- tf$Variable(samples, dtype = "float64")
-        # 
         # # # #
         # tf_out <- compute_joint_llh_tf2(y_i_tf, X_i_tf, Z_i_tf, alpha_all_tf, theta_tf, S_alpha)
         # browser()
@@ -490,7 +493,7 @@ construct_Sigma <- function(theta, d, use_chol = T) { #d is the dimension of Sig
   } else {
     nlower <- d*(d-1)/2
     L <- diag(exp(theta[1:d]))
-    offdiags <- theta[-(1:d)] # off diagonal elements are those after the first 2*d elements
+    offdiags <- theta[-(1:d)] # off diagonal elements are those after the first d elements
     if (use_chol) {
       for (k in 1:nlower) {
         ind <- index_to_i_j_rowwise_nodiag(k)
