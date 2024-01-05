@@ -1,4 +1,4 @@
-setwd("/home/babv971/R-VGAL/5_Poisson/")
+# setwd("/home/babv971/R-VGAL/5_Poisson/")
 ## Structure:
 # 1. Generate data
 # 2. Run R-VGAL algorithm
@@ -57,13 +57,13 @@ source("./source/run_multi_sims_hmc.R")
 ## Flags
 date <- "20231224" #"20231223"# #1223 is the good one 
 regenerate_data <- F
-rerun_rvgal_sims <- T
+rerun_rvgal_sims <- F
 rerun_hmc_sims <- F
 save_datasets <- F
-save_rvgal_sim_results <- T
+save_rvgal_sim_results <- F
 save_hmc_sim_results <- F
 plot_prior <- F
-save_plots <- T
+save_plots <- F
 reorder_data <- F
 use_tempering <- T
 
@@ -92,7 +92,7 @@ if (grepl("_0", date)) {
   Sigma_alpha <- 0.1*diag(1:n_random_effects)
 } else {
   Sigma_alpha <- matrix(c(0.15, 0.05, 0.05, 0.2), 2, 2)
-  # Sigma_alpha <- matrix(c(0.16, 0.05, 0.05, 0.25), 2, 2)
+  # Sigma_alpha <- matrix(c(0.16, 0.04, 0.04, 0.25), 2, 2)
 }
 n_fixed_effects <- length(beta)
 param_dim <- n_fixed_effects + n_random_effects * (n_random_effects+1)/2
@@ -138,30 +138,6 @@ result_directory <- paste0("./multi_sims/results/", date, "/")
 
 test <- sapply(datasets, function(x) unlist(x$y))
 hist(test)
-# head(sort(test, decreasing = T))
-# all_lambda <- unlist(lambda_list)
-# hist(all_lambda)
-# 
-# sim_test <- ceiling(which.max(test)/2000)
-# ind <- ceiling(which.max(lambda_list[[sim_test]])/10)
-# X_test <- datasets[[sim_test]]$X[[ind]]
-# Z_test <- datasets[[sim_test]]$Z[[ind]]
-# alpha_test <- datasets[[sim_test]]$alpha[[ind]]
-# exp(X_test %*% beta + Z_test %*% alpha_test)
-
-
-# R <- 10000
-# za <- list()
-# Sigma_alpha_test <- matrix(c(0.16, 0.05, 0.05, 0.25), 2, 2)
-# for (r in 1:R) {
-#   z <- matrix(rnorm(n * 2), nrow = n, ncol = 2)
-#   alpha <- rmvnorm(1, c(0,0), Sigma_alpha_test)
-#   za[[r]] <- z %*% t(alpha)
-# }
-# hist(unlist(za))
-# sd(unlist(za))
-# browser()
-
 
 ####################
 ##     R-VGAL     ##
@@ -172,22 +148,8 @@ S_alpha <- 100L
 
 rvgal_sim_results <- list()
 error_inds <- c()
-# error_inds <- c(17, 26, 31, 34, 51, 57, 74, 88, 90, 96)
-# error_inds <- c(31, 34)
-# error_inds <- c(59)
-sims_to_run <- 1:nsims #c(23, 32, 37) 
 
-# error_inds <- readRDS(paste0(result_directory, "/error_inds.rds"))
-# for (sim in 1:nsims) {
-#   rvgal.result_file <- paste0("poisson_rvgal", temper_info, reorder_info,
-#                               "_N", N, "_n", n, "_S", S, "_Sa", S_alpha, "_", date, "_",
-#                               formatC(sim, width=3, flag="0"), ".rds")
-#   saveRDS(rvgal_sim_results[[sim]], file = paste0(result_directory, rvgal.result_file))
-#   
-#   if (is.null(rvgal_sim_results[[sim]])) {
-#     error_inds <- c(error_inds, sim)
-#   }
-# }
+sims_to_run <- 1:nsims 
 
 print("Starting R-VGAL simulations...")
 for (sim in sims_to_run) {
@@ -265,7 +227,10 @@ for (sim in sims_to_run) {
   }
 }
 
-## Run HMC simulations
+##################################
+##      Run HMC simulations     ##
+##################################
+
 print("Starting HMC simulations...")
 hmc_sim_results <- list()
 burn_in <- 5000
@@ -273,28 +238,11 @@ n_chains <- 2
 
 if (rerun_hmc_sims) {
   
-  
   sims <- 1:nsims
   hmc_sim_results <- parallel::mclapply(sims, run_multi_sims_hmc, mc.cores = 50L,
                      date = date, 
                      n_post_samples = n_post_samples,
                      burn_in = burn_in)
-  # hmc_sim_results <- lapply(sims, run_multi_sims_hmc, 
-  #                           date = date,
-  #                           n_post_samples = n_post_samples,
-  #                           burn_in = burn_in) #, mc.cores = 10L)
-  
-  # for (sim in 1:nsims) {
-  #   hmc.result_file <- paste0(result_directory, 
-  #                             "poisson_hmc_N", N, "_n", n, "_", date, "_",
-  #                             formatC(sim, width=3, flag="0"), ".rds")
-  #   
-  #   if (save_hmc_sim_results) {
-  #     saveRDS(hmc_sim_results[[sim]], hmc.result_file)
-  #   }
-  #   
-  # }
-  
 } 
 
 for (sim in 1:nsims) {
@@ -305,26 +253,17 @@ for (sim in 1:nsims) {
   hmc_sim_results[[sim]] <- readRDS(file = hmc.result_file)
 }
 
-
-# }
-
 ## Plot results
 rvgal.sim_results_list <- list()
 hmc.sim_results_list <- list()
 for (sim in 1:nsims) {
   
   ## R-VGAL posterior samples
-  # post_mu <- rvgal_sim_results[[sim]]$mu[[N+1]]
-  # post_var <- chol2inv(chol(rvgal_sim_results[[sim]]$prec[[N+1]]))
   rvgal.sim_results_list[[sim]] <- rvgal_sim_results[[sim]]$post_samples  #rmvnorm(n_post_samples, post_mu, post_var)
   
   hmc.samples <- matrix(NA, n_post_samples, param_dim)
   for (p in 1:param_dim) {
-    # if (p == (param_dim - 1) || p == param_dim) { # if the parameters are variance parameters
-    #   hmc.samples[, p] <- sqrt(exp(hmc.fit[, , p]))
-    # } else {
     hmc.samples[, p] <- hmc_sim_results[[sim]]$post_samples[-(1:burn_in), , p]
-    # }
   }
   hmc.sim_results_list[[sim]] <- hmc.samples
 }
@@ -347,13 +286,6 @@ rvgal.sds_allparams <- lapply(rvgal.sim_results_list, function(x) apply(x, 2, sd
 par(mfrow = c(2, 3))
 for (p in 1:param_dim) {
   
-  # if (p == param_dim || p == (param_dim - 1)) {
-  #   rvgal.means[, p] <- sapply(1:nsims, function(sim) sqrt(exp(rvgal_sim_results[[sim]]$mu[[N+1]][p]))) 
-  # } else {
-  #   rvgal.means[, p] <- sapply(1:nsims, function(sim) rvgal_sim_results[[sim]]$mu[[N+1]][p]) 
-  #   
-  # }
-  # rvgal.means[, p] <- sapply(1:nsims, function(sim) rvgal_sim_results[[sim]]$mu[[N+1]][p])
   rvgal.means[, p] <- sapply(rvgal.means_allparams, function(x) x[p])
   hmc.means[, p] <- sapply(hmc.means_allparams, function(x) x[p])
   
@@ -361,8 +293,6 @@ for (p in 1:param_dim) {
   rvgal.sds[, p] <- sapply(rvgal.sds_allparams, function(x) x[p])
   hmc.sds[, p] <- sapply(hmc.sds_allparams, function(x) x[p])
   
-  # plot(hmc.means[, p], rvgal.means[, p])
-  # abline(0, 1, lty = 2)
 }
 
 means_df <- data.frame(rvgal_mean = c(rvgal.means), hmc_mean = c(hmc.means))
