@@ -1,4 +1,4 @@
-# setwd("~/R-VGAL/2_Logistic/")
+setwd("~/R-VGAL/2_Logistic/")
 
 # Structure:
 # 1. Generate data
@@ -11,7 +11,7 @@ rm(list=ls())
 date <- "20231201" #"20230329"  
 regenerate_data <- F
 rerun_rvgal <- F
-rerun_stan <- T
+rerun_stan <- F
 save_data <- F
 save_rvga_results <- F
 save_hmc_results <- F
@@ -20,8 +20,9 @@ reorder_data <- F
 use_tempering <- T
 
 ## Load packages
-# reticulate::use_condaenv("tf2.11", required = TRUE)
+reticulate::use_condaenv("myenv", required = TRUE)
 library(dplyr)
+library(ggplot2)
 library(tensorflow)
 library(mvtnorm)
 library(rstan)
@@ -67,7 +68,7 @@ n_post_samples <- 20000
 ##    1. Generate data     ##
 #############################
 
-N <- 500L #number of individuals
+N <- 5000L #number of individuals
 n <- 10L # number of responses per individual
 beta <- c(-1.5, 1.5, 0.5, 0.25) 
 tau <- 0.9
@@ -113,8 +114,8 @@ P_0 <- diag(c(rep(10, n_fixed_effects), 1))
 #######################
 ##     2. R-VGAL     ##
 #######################
-S <- 100L
-S_alpha <- 100L
+S <- 200L
+S_alpha <- 200L
 
 ## Set up result directory
 if (use_tempering) {
