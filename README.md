@@ -29,6 +29,8 @@ Results from Section S3 of the online supplement can be reproduced by running th
 
 Results from Section S4 of the online supplement can be reproduced by running the `*_multi_sims.R` files in the `1_Linear/multi_sims/`, `2_Logistic/multi_sims/` and `5_Poisson/multi_sims/` folders. Results in the manuscript have been pre-saved so that they can be reproduced if the flag `rerun_rvgal_sims` and `rerun_hmc_sims` are set to `FALSE`. The simulations can be re-run by setting these flags to `TRUE`.
 
+Note that the flag to use the damped version of R-VGAL (which is used throughout the paper) is the `use_tempering` flag. This is set to `TRUE` by default.
+
 The RStudio version and R packages required to run the code, along with installation instructions for these packages, can be found in the next section. 
 
 ## RStudio version requirements
